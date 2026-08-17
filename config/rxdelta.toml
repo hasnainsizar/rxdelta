@@ -1,0 +1,208 @@
+# rxdelta configuration.
+#
+# Source of the numeric code mappings below:
+#   CMS "Prescription Drug Plan Formulary, Pharmacy Network, and Pricing
+#   Information Files" monthly public use files. Each monthly release ships a
+#   record layout / data dictionary PDF; the coverage level, cost type and days
+#   supply code lists come from the Beneficiary Cost File layout in that
+#   document.
+#
+# CMS revises record layouts between contract years. Check the layout that
+# shipped with the period you are loading before trusting any output. A code
+# that appears in a source file but not in this config is a hard load failure,
+# by design: the loader names the code and the file rather than guessing.
+
+[source]
+# Real CMS public use files are pipe delimited flat text. Change these values,
+# and the glob patterns below, to point the ingest layer at a different
+# delimited dataset without touching the diff layer.
+delimiter = "|"
+# The 2026 plan information file carries Spanish plan names ("Optimo Plus",
+# "Freedom Maximo") encoded as single high bytes, 0xd3 and 0xe1, which are not
+# valid UTF-8. They decode as cp1252, which is also a superset of ASCII and so
+# reads the synthetic fixtures unchanged. CMS does not state an encoding in the
+# record layout, so this is from the bytes on disk.
+encoding = "cp1252"
+# A CMS release nests each table in its own directory and ships a directory of
+# short sample extracts alongside the real ones. The sample files match the same
+# name patterns, so they are excluded by directory rather than by tightening the
+# patterns, which would be more fragile.
+exclude_dir_patterns = ["sample files*", "__MACOSX"]
+
+[source.files.formulary]
+patterns = ["basic drugs formulary file*", "formulary*"]
+
+[source.files.plan_info]
+patterns = ["plan information*", "plan_info*"]
+
+[source.files.beneficiary_cost]
+patterns = ["beneficiary cost file*", "beneficiary_cost*"]
+
+[ingest]
+# A load that rejects more than this share of rows in any single file aborts
+# the whole month rather than writing a partial snapshot.
+max_rejected_pct = 5.0
+# Rows are streamed into SQLite in batches of this size inside one transaction,
+# rather than the whole file being held in memory first. The real formulary file
+# is 1.1 million rows.
+insert_chunk_rows = 25000
+
+[ingest.ndc]
+# An unhyphenated 10 digit NDC cannot be resolved to 11 digits without knowing
+# the labeler segment length, and the segment length is not derivable from the
+# digits. Policy options:
+#   "reject"      send the row to rejected_rows with a reason (default)
+#   "assume_5_4_1" treat as 5-4-1 and pad the third segment
+#   "assume_5_3_2" treat as 5-3-2 and pad the second segment
+#   "assume_4_4_2" treat as 4-4-2 and pad the first segment
+unhyphenated_10_digit = "reject"
+
+# Tier labels are display only. Ordering comes from the numeric tier level.
+[tiers]
+"1" = "Preferred generic"
+"2" = "Generic"
+"3" = "Preferred brand"
+"4" = "Non-preferred drug"
+"5" = "Specialty"
+"6" = "Select care"
+
+# All three code lists below are transcribed from the BENEFICIARY COST FILE
+# table on page 10 of docs/cms-reference/PUFRecordLayout-2026.pdf.
+
+# COVERAGE_LEVEL 9(1): "Coverage type for beneficiary with no subsidy.
+# 0=pre-deductible, 1=initial coverage, 3=catastrophic". There is no code 2.
+[codes.coverage_level]
+"0" = "Pre-deductible"
+"1" = "Initial coverage"
+"3" = "Catastrophic"
+
+# COST_TYPE_* 9(1): "0=not offered, 1=copay, 2=coinsurance".
+# "kind" tells the impact estimator how to read the amount columns. A copay row
+# carries dollars in COST_AMT. A coinsurance row carries a fraction there (the
+# layout gives .25 as 25%), which cannot be turned into dollars without a drug
+# price, so only the CMS supplied COST_MIN_AMT and COST_MAX_AMT dollar bounds
+# are used. A not_offered row is skipped: its zeros mean the channel does not
+# exist, not that the drug is free there.
+[codes.cost_type."0"]
+label = "Not offered"
+kind = "not_offered"
+
+[codes.cost_type."1"]
+label = "Copay"
+kind = "copay"
+
+[codes.cost_type."2"]
+label = "Coinsurance"
+kind = "coinsurance"
+
+# DAYS_SUPPLY 9(1): "Length of days supply to which cost structure applies.
+# 1=30 days, 2=90 days, 3=other, 4=60 days". Note the codes are not in
+# ascending order of length. Code 3 has no stated length, so it carries no
+# "days" value and rows using it are left unpriced rather than guessed at.
+[codes.days_supply."1"]
+label = "30 day supply"
+days = 30
+
+[codes.days_supply."2"]
+label = "90 day supply"
+days = 90
+
+[codes.days_supply."3"]
+label = "Other supply length"
+
+[codes.days_supply."4"]
+label = "60 day supply"
+days = 60
+
+[impact]
+# Cost sharing is only estimated for this coverage level. Code 1 is the initial
+# coverage phase per record layout page 10. The pre-deductible (0) and
+# catastrophic (3) phases are out of scope, see the limitations text.
+coverage_level = "1"
+# Every cost row is scaled to this many days so a 90 day mail copay and a 30
+# day retail copay can be compared on one axis. A row whose DAYS_SUPPLY code has
+# no published length is left unpriced instead.
+normalize_days = 30
+
+[severity]
+# Weights are relative; they are normalized to sum to 1 when the score is
+# computed. The score is reported on a 0 to 100 scale.
+weight_cost = 0.40
+weight_direction = 0.15
+weight_plans = 0.25
+weight_restriction = 0.20
+# Monthly dollar move worth half the available cost weight. The cost component
+# is amount / (amount + cost_reference), which keeps rising with the amount
+# instead of flattening, so two large moves still rank against each other.
+cost_reference = 100.0
+# Affected plan count that saturates the reach component of the score.
+plan_reference = 40
+# Applied to the cost component when the member cost after the change is not
+# bounded by the data, that is, a drug leaving or joining the formulary.
+open_ended_factor = 1.0
+
+# The modal case: the single most common way a member actually fills a
+# prescription. The report leads with the figure for this combination and keeps
+# the full range beneath it. Both are shown; the modal figure never replaces the
+# range. Channel must be one of the four the beneficiary cost file publishes.
+[impact.modal]
+channel = "retail_preferred"
+days_supply = "1"
+
+[report]
+# Order applied after severity when ranking change groups, so ties resolve on
+# something meaningful rather than on NDC sort order. Each entry is a field and
+# a direction. Valid fields: severity, plan_count, range_width, abs_midpoint,
+# ndc. The list must end with a field that is unique per group, so the sort is
+# deterministic across runs.
+sort_order = [
+    { field = "severity",     direction = "desc" },
+    { field = "plan_count",   direction = "desc" },
+    { field = "range_width",  direction = "desc" },
+    { field = "abs_midpoint", direction = "desc" },
+    { field = "ndc",          direction = "asc" },
+]
+
+# Below this many changes the report opens with a plain low result notice
+# instead of rendering a near empty page.
+low_result_floor = 25
+# Maximum number of change groups listed in the top changes table.
+top_changes = 50
+# Maximum plan ids listed inside a row's plan disclosure. On the real files one
+# change can reach 822 plans, and listing every one of them for every row made
+# the committed report 6MB. The full count is always stated next to the list.
+max_plans_listed = 40
+
+# Severity bands label the 0 to 100 score so the report never communicates rank
+# by position alone. Listed high to low; the first band whose min_score the
+# score meets or exceeds wins. The lowest band must start at 0.
+[[report.severity_bands]]
+label = "High"
+min_score = 75.0
+
+[[report.severity_bands]]
+label = "Elevated"
+min_score = 50.0
+
+[[report.severity_bands]]
+label = "Moderate"
+min_score = 25.0
+
+[[report.severity_bands]]
+label = "Low"
+min_score = 0.0
+
+[names]
+# Drug names come from the NLM RxNav API, which is public and needs no key.
+# Resolved names are cached to the file below and the cache is committed, so
+# `rxdelta report` and `make demo` never touch the network. A name missing from
+# the cache falls back to the NDC in the report rather than erroring or leaving
+# a blank cell.
+cache_path = "data/reference/drug_names.csv"
+api_base = "https://rxnav.nlm.nih.gov/REST"
+# RxNav asks for no more than 20 requests per second per IP. This is well under.
+requests_per_second = 8.0
+request_timeout_seconds = 15.0
+max_retries = 3
+# RXCUIs per progress report while refreshing.
+progress_every = 100

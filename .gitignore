@@ -1,0 +1,45 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Real CMS public use files: gigabytes of them, redistributed under an agreement
+# for use. Download them yourself, see the README.
+data/*
+# The synthetic fixtures and the drug name cache stay tracked, so `make demo`
+# works for anyone who clones without any download at all.
+!data/2025-01/
+!data/2025-01/**
+!data/2025-02/
+!data/2025-02/**
+!data/reference/
+!data/reference/**
+*.db
+*.db-wal
+*.db-shm
+
+# Reports written at the repo root. docs/example-report.html is committed.
+/report.html
+/ci-report.html
+
+# Design tooling installed into the repo by `npx impeccable install`. These are
+# vendored copies of a third party toolchain, 6MB of it, not project source.
+# PRODUCT.md is deliberately NOT ignored: it is the brief the report's design is
+# accountable to. See DECISIONS.md.
+.claude/skills/impeccable/
+.github/skills/
+.github/agents/
+.github/hooks/
+.impeccable/
+.impeccable.md
+
+.env
+.DS_Store

@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rxdelta: formulary changes {{ month_from }} to {{ month_to }}</title>
+<style>
+{% for face in faces %}
+@font-face {
+  font-family: "{{ face.family }}";
+  font-style: normal;
+  font-weight: {{ face.weight }};
+  font-display: swap;
+  src: url({{ face.data_uri }}) format("woff2");
+}
+{% endfor %}
+{% for face in faces %}
+@font-face {
+  font-family: "{{ face.fallback_family }}";
+  src: local("{{ face.fallback }}"), local("Arial");
+  size-adjust: {{ face.size_adjust }};
+  ascent-override: {{ face.ascent_override }};
+  descent-override: {{ face.descent_override }};
+  line-gap-override: {{ face.line_gap_override }};
+}
+{% endfor %}
+
+:root {
+  /* Ink ramp and two semantic hues. Every pair below is verified at WCAG AA
+     against both the paper and the banded row background. */
+  --paper:       oklch(1.000 0.000 0);
+  --band:        oklch(0.976 0.003 250);
+  --rule:        oklch(0.885 0.006 250);
+  --rule-strong: oklch(0.620 0.010 250);
+  --ink:         oklch(0.215 0.010 250);
+  --ink-2:       oklch(0.445 0.012 250);
+  --ink-3:       oklch(0.535 0.012 250);
+  --up:          oklch(0.425 0.105 25);
+  --down:        oklch(0.470 0.068 168);
+
+  --sans: "Public Sans", "Public Sans Fallback", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Roboto Mono", "Roboto Mono Fallback", Menlo, Consolas, monospace;
+
+  /* 4pt base scale. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+
+  /* Fixed rem ramp, 1.2 ratio. Product register: no fluid type. */
+  --t-xs:   0.75rem;
+  --t-sm:   0.8125rem;
+  --t-base: 0.9375rem;
+  --t-md:   1.0625rem;
+  --t-lg:   1.375rem;
+  --t-xl:   1.75rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  font-variant-numeric: tabular-nums;
+  font-kerning: normal;
+}
+
+body {
+  margin: 0;
+  padding: var(--s-7) var(--s-4) var(--s-8);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-base);
+  line-height: 1.55;
+}
+
+main { max-width: 60rem; margin: 0 auto; }
+
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+
+p { margin: 0 0 var(--s-3); max-width: 72ch; text-wrap: pretty; }
+p:last-child { margin-bottom: 0; }
+
+/* ---- masthead ---------------------------------------------------------- */
+
+.masthead {
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+.wordmark {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: var(--s-3);
+}
+h1 {
+  font-size: var(--t-xl);
+  line-height: 1.15;
+  letter-spacing: -0.018em;
+}
+.period {
+  font-family: var(--mono);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.standfirst {
+  color: var(--ink-2);
+  font-size: var(--t-md);
+  line-height: 1.5;
+  margin-top: var(--s-3);
+  max-width: 62ch;
+}
+.filed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: var(--s-3);
+  margin-bottom: var(--s-7);
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.filed span { white-space: nowrap; }
+.filed .v { font-family: var(--mono); color: var(--ink-2); }
+
+/* ---- section headings -------------------------------------------------- */
+
+section { margin-bottom: var(--s-7); }
+section:last-of-type { margin-bottom: 0; }
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+.head h2 {
+  font-size: var(--t-md);
+  letter-spacing: -0.008em;
+}
+.head .count {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.note {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  margin-bottom: var(--s-4);
+}
+
+/* ---- scope figures ----------------------------------------------------- */
+
+.scope {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--rule);
+}
+.scope > div {
+  padding: var(--s-3) var(--s-4) var(--s-3) 0;
+  border-bottom: 1px solid var(--rule);
+}
+.scope dt {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  margin-bottom: var(--s-1);
+}
+.scope dd {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.scope dd .unit {
+  display: block;
+  font-size: var(--t-xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  margin-top: var(--s-1);
+}
+
+/* ---- limitations: promoted, never a footnote --------------------------- */
+
+.limitations {
+  border: 1px solid var(--rule-strong);
+  border-top: 2px solid var(--ink);
+  background: var(--band);
+  padding: var(--s-5) var(--s-5) var(--s-4);
+}
+.limitations h2 {
+  font-size: var(--t-md);
+  margin-bottom: var(--s-2);
+}
+.limitations .lead {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  margin-bottom: var(--s-4);
+}
+.limits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+}
+.limits li {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  color: var(--ink);
+}
+.limits b { font-weight: 600; }
+
+/* ---- notice ------------------------------------------------------------ */
+
+.notice {
+  border: 1px solid var(--rule-strong);
+  border-top: 2px solid var(--up);
+  padding: var(--s-4) var(--s-5);
+  margin-bottom: var(--s-6);
+}
+.notice h2 { font-size: var(--t-md); margin-bottom: var(--s-2); }
+.notice ul { margin: var(--s-3) 0 0; padding-left: var(--s-4); }
+.notice li { margin-bottom: var(--s-2); font-size: var(--t-sm); color: var(--ink-2); }
+.notice li:last-child { margin-bottom: 0; }
+
+/* ---- tables ------------------------------------------------------------ */
+
+.scroll { overflow-x: auto; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--t-sm);
+}
+caption { text-align: left; caption-side: top; }
+
+thead th {
+  text-align: left;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 var(--s-3) var(--s-2) 0;
+  border-bottom: 1px solid var(--rule-strong);
+  vertical-align: bottom;
+  line-height: 1.25;
+}
+tbody td {
+  padding: var(--s-3) var(--s-3) var(--s-3) 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+thead th:last-child, tbody td:last-child { padding-right: 0; }
+.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+th.num { text-align: right; }
+
+.changes { table-layout: fixed; min-width: 46rem; }
+
+.code {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.sub {
+  display: block;
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+/* The NDC and RXCUI line is longer than the column at some widths; let it wrap
+   at the separator rather than spill into the change column. */
+.sub.code { letter-spacing: 0; white-space: normal; }
+.sub.code .nowrap { white-space: nowrap; }
+
+.drug-name { display: block; line-height: 1.3; }
+.drug-name-missing { font-family: var(--mono); font-size: var(--t-sm); }
+
+/* Full plan list, collapsed on screen and forced open on paper. */
+.plans { margin-top: 2px; }
+.plans summary {
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  list-style: none;
+}
+.plans summary::-webkit-details-marker { display: none; }
+.plans summary::before { content: "\25B8"; margin-right: .35em; display: inline-block; }
+.plans[open] summary::before { transform: rotate(90deg); }
+.plans summary:hover { color: var(--ink); }
+.plans summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.plans ul {
+  margin: var(--s-1) 0 0;
+  padding: 0 0 0 var(--s-3);
+  list-style: none;
+  columns: 2;
+  column-gap: var(--s-3);
+}
+.plans li { font-size: var(--t-xs); color: var(--ink-2); line-height: 1.5; }
+.plans li.more { font-family: var(--sans); color: var(--ink-3); }
+
+.th-sub {
+  display: block;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  margin-top: 2px;
+}
+.bound {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--ink-2);
+  margin-top: 3px;
+  white-space: normal;
+}
+.flag {
+  font-family: var(--sans);
+  color: var(--ink-3);
+}
+
+.tier-move { display: block; line-height: 1.35; }
+.tier-move .lvl { font-family: var(--mono); color: var(--ink-3); }
+
+/* Direction: glyph plus word plus color. Any one of the three carries it. */
+.money { font-family: var(--mono); white-space: nowrap; font-weight: 600; }
+.money.up { color: var(--up); }
+.money.down { color: var(--down); }
+.money.flat { color: var(--ink-3); font-weight: 400; }
+.dir {
+  display: block;
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.glyph { font-family: var(--sans); }
+
+.sev { font-family: var(--mono); }
+.sev-band {
+  display: block;
+  font-family: var(--sans);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* Rollup: two columns, no chart. The counts are the information. */
+.tally { max-width: 34rem; }
+.tally td:first-child, .tally th:first-child { width: 70%; }
+
+/* ---- colophon ---------------------------------------------------------- */
+
+.colophon {
+  margin-top: var(--s-7);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--ink);
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+.colophon p { max-width: 78ch; }
+.colophon .mono { font-family: var(--mono); }
+
+.empty {
+  padding: var(--s-5) 0;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ---- narrow: the table becomes stacked records ------------------------- */
+
+@media (max-width: 46rem) {
+  body { padding: var(--s-5) var(--s-4) var(--s-7); }
+  h1 { font-size: var(--t-lg); }
+  .standfirst { font-size: var(--t-base); }
+
+  /* The findings table becomes a stack of records. Each cell carries its own
+     label, so the column header row is redundant and is removed outright:
+     hiding it off-canvas still leaves its cells contributing scroll width. */
+  .scroll { overflow-x: visible; }
+  .changes { min-width: 0; table-layout: auto; display: block; }
+  .changes thead { display: none; }
+  .changes colgroup { display: none; }
+  .changes tbody, .changes tr { display: block; width: auto; }
+  .changes tr {
+    border-bottom: 1px solid var(--rule-strong);
+    padding: var(--s-3) 0;
+    background: none;
+  }
+
+  /* Label in column one, every value stacked right aligned in column two.
+     Grid rather than flex so a cell with two children cannot overflow. */
+  .changes td {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 var(--s-3);
+    align-items: baseline;
+    border: 0;
+    padding: 0 0 var(--s-2);
+    text-align: left;
+  }
+  .changes td::before {
+    content: attr(data-label);
+    grid-column: 1;
+    font-size: var(--t-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+  }
+  .changes td > * {
+    grid-column: 2;
+    text-align: right;
+    display: block;
+    margin: 0;
+  }
+  .changes td .money { white-space: normal; }
+
+  .changes td.drug {
+    display: block;
+    padding-bottom: var(--s-2);
+    margin-bottom: var(--s-2);
+    border-bottom: 1px dotted var(--rule);
+  }
+  .changes td.drug::before { display: none; }
+  .changes td.drug > * { text-align: left; }
+
+  /* The disclosure already states the plan count, so the standalone row would
+     say it twice in the stacked layout. */
+  .changes td[data-label="Plans"] { display: none; }
+  .plans ul { columns: 1; }
+
+  .tally { max-width: none; }
+}
+
+/* ---- print: US Letter, ink saving, repeating header --------------------- */
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.6in 0.55in;
+  }
+  html { font-size: 10.5pt; }
+  body {
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+  main { max-width: none; }
+
+  /* No filled backgrounds on paper. Rules do the separating instead. */
+  .limitations {
+    background: none;
+    border: 1pt solid #000;
+    border-top: 2.5pt solid #000;
+    break-inside: avoid;
+  }
+  .notice { border: 1pt solid #000; border-top: 2.5pt solid #000; break-inside: avoid; }
+
+  /* Six figures wrap to 5 + 1 at Letter width; three columns gives two even rows. */
+  .scope { grid-template-columns: repeat(3, 1fr); }
+
+  /* Paper cannot be clicked, so the plan lists print expanded. Current Chrome
+     hides closed disclosure content with content-visibility on the
+     ::details-content pseudo element, which display alone does not override;
+     the display rule is kept for engines that predate that pseudo element. */
+  .plans summary { display: none; }
+  .plans::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+  .plans:not([open]) > ul { display: block; }
+  .plans ul { padding-left: 0; columns: 3; }
+
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, .limits li, .scope > div { break-inside: avoid; }
+  h1, h2 { break-after: avoid; }
+  section { break-inside: auto; margin-bottom: var(--s-5); }
+
+  .money.up, .money.down, .money.flat { color: #000; }
+  .colophon { color: #000; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <header class="masthead">
+    <div class="wordmark">rxdelta / Medicare Part D formulary diff</div>
+    <h1>
+      Coverage changes,
+      <span class="period">{{ month_from }}</span> to <span class="period">{{ month_to }}</span>
+    </h1>
+    <p class="standfirst">
+      What changed in Part D drug coverage between two monthly CMS snapshots, and what each
+      change is estimated to do to a member's out of pocket cost.
+    </p>
+  </header>
+
+  <div class="filed">
+    <span>Generated <span class="v">{{ generated_at }}</span></span>
+    <span>Coverage phase priced: <span class="v">{{ coverage_phase }}</span></span>
+    <span>Normalized to <span class="v">{{ normalize_days }} day supply</span></span>
+    {% if plan_filter %}
+    <span>Filtered to contract <span class="v">{{ plan_filter }}</span></span>
+    {% endif %}
+  </div>
+
+  <section>
+    <div class="head">
+      <h2>Scope of this comparison</h2>
+    </div>
+    <dl class="scope">
+      <div>
+        <dt>Changes</dt>
+        <dd>{{ "{:,}".format(total_changes) }}<span class="unit">drug and plan pairs</span></dd>
+      </div>
+      <div>
+        <dt>Distinct changes</dt>
+        <dd>{{ "{:,}".format(change_groups) }}<span class="unit">groups</span></dd>
+      </div>
+      <div>
+        <dt>Drugs affected</dt>
+        <dd>{{ "{:,}".format(affected_drugs) }}</dd>
+      </div>
+      <div>
+        <dt>Plans affected</dt>
+        <dd>{{ "{:,}".format(affected_plans) }}<span class="unit">of {{ "{:,}".format(plans_compared) }}</span></dd>
+      </div>
+      <div>
+        <dt>Drugs in {{ month_from }}</dt>
+        <dd>{{ "{:,}".format(drugs_from) }}</dd>
+      </div>
+      <div>
+        <dt>Drugs in {{ month_to }}</dt>
+        <dd>{{ "{:,}".format(drugs_to) }}</dd>
+      </div>
+    </dl>
+    {% if plans_added or plans_removed %}
+    <p class="note" style="margin-top: var(--s-3)">
+      {{ plans_added }} plan(s) appear only in {{ month_to }} and {{ plans_removed }} only in
+      {{ month_from }}. Those plans have no counterpart to compare against and are excluded from
+      every figure above.
+    </p>
+    {% endif %}
+  </section>
+
+  <section class="limitations">
+    <h2>{{ limitations_title }}</h2>
+    <p class="lead">
+      Read this before the findings, not after them. The figures below are ranges derived from
+      published cost sharing tables. They are not predictions of what any individual member will
+      pay, and each item here can move a real number by more than the change being reported.
+    </p>
+    <ul class="limits">
+      {% for limitation in limitations %}
+      <li>{{ limitation }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% if notice %}
+  <div class="notice">
+    <h2>Very few changes found</h2>
+    <p>
+      This comparison found {{ notice.count }} distinct change group(s), below the reporting floor
+      of {{ notice.floor }}. That is a real result, not a rendering failure. The likely reasons:
+    </p>
+    <ul>
+      {% for reason in notice.reasons %}
+      <li>{{ reason }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <section>
+    <div class="head">
+      <h2>Changes ranked by estimated member impact</h2>
+      {% if rows %}
+      <span class="count">{{ shown }} of {{ "{:,}".format(change_groups) }}</span>
+      {% endif %}
+    </div>
+    {% if rows %}
+    <p class="note">
+      {{ estimate_note }} Each row leads with the modal case, a fill at a {{ modal_channel }} on a
+      {{ modal_supply }} in the {{ coverage_phase | lower }} phase, which is how a member most often
+      actually fills a prescription. The modal figure does not replace the range. The range beneath
+      it is the bound across every pharmacy type and supply length the plan publishes, and where
+      that bound crosses zero the row is flagged, because the bound is then disagreeing with the
+      headline about which way cost moves. {{ open_ended_note }}
+    </p>
+    <div class="scroll">
+      <table class="changes">
+        <colgroup>
+          <col style="width: 21%"><col style="width: 18%"><col style="width: 15%">
+          <col style="width: 6%"><col style="width: 28%"><col style="width: 12%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">Drug</th>
+            <th scope="col">Change</th>
+            <th scope="col">Tier before and after</th>
+            <th scope="col" class="num">Plans</th>
+            <th scope="col" class="num">Est. monthly change<span class="th-sub">modal case, then full range</span></th>
+            <th scope="col" class="num">Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="drug" data-label="Drug">
+              <span class="drug-name{% if not row.has_name %} drug-name-missing{% endif %}">{{ row.drug_label }}</span>
+              <span class="sub code">{% if row.has_name %}<span class="nowrap">{{ row.ndc }}</span> <span class="nowrap">RXCUI {{ row.rxcui }}</span>{% else %}<span class="nowrap">RXCUI {{ row.rxcui }}</span>, no name cached{% endif %}</span>
+            </td>
+            <td data-label="Change">
+              {{ row.change_types }}
+              <details class="plans">
+                <summary>{{ row.plan_count }} plan{{ "" if row.plan_count == 1 else "s" }}</summary>
+                <ul>
+                  {% for plan in row.plans %}
+                  <li class="code">{{ plan }}</li>
+                  {% endfor %}
+                  {% if row.plans_hidden %}
+                  <li class="more">and {{ "{:,}".format(row.plans_hidden) }} more</li>
+                  {% endif %}
+                </ul>
+              </details>
+            </td>
+            <td data-label="Tier">
+              <span class="tier-move">
+                {% if row.tier_before_level %}<span class="lvl">T{{ row.tier_before_level }}</span> {% endif %}{{ row.tier_before }}
+              </span>
+              <span class="tier-move">
+                to {% if row.tier_after_level %}<span class="lvl">T{{ row.tier_after_level }}</span> {% endif %}{{ row.tier_after }}
+              </span>
+            </td>
+            <td class="num" data-label="Plans">{{ row.plan_count }}</td>
+            <td class="num" data-label="Est. monthly change">
+              <span class="money {{ row.modal_class }}">{{ row.modal }}</span>
+              <span class="dir">
+                {% if row.modal_glyph %}<span class="glyph" aria-hidden="true">{{ row.modal_glyph }}</span> {% endif %}{{ row.modal_word }}{% if row.modal_known %} at modal case{% endif %}
+              </span>
+              <span class="bound">
+                range {{ row.impact }}{% if row.spans_zero %} <span class="flag">spans zero</span>{% endif %}
+              </span>
+            </td>
+            <td class="num" data-label="Severity">
+              <span class="sev">{{ "%.1f"|format(row.severity) }}</span>
+              <span class="sev-band">{{ row.severity_band }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin: var(--s-4) 0 0">
+      A group is one drug with one combination of changes and one tier movement, counted across
+      every plan it affects. Severity is a 0 to 100 sorting score combining the size of the range,
+      its direction, how many plans it reaches, and whether a utilization restriction was added.
+      Bands: {% for band in severity_bands %}{{ band.label }} at {{ "%g"|format(band.min_score) }}{% if not loop.last %}, {% endif %}{% endfor %}.
+      {% if not severity_summary.discriminates %}
+      On this comparison the score takes only {{ severity_summary.distinct }} distinct value(s)
+      across {{ "{:,}".format(severity_summary.total) }} group(s), with {{ severity_summary.largest_tie }}
+      group(s) sharing a single value, so treat the order within a band as unranked rather than as a
+      fine grained judgement.
+      {% else %}
+      The score takes {{ severity_summary.distinct }} distinct value(s) across
+      {{ "{:,}".format(severity_summary.total) }} group(s) here; ties are broken by affected plan
+      count, then range width, then distance from zero.
+      {% endif %}
+      {% if named_rows < shown %}
+      {{ shown - named_rows }} of the {{ shown }} listed drug(s) have no cached name and are shown
+      by NDC.
+      {% endif %}
+    </p>
+    {% else %}
+    <p class="empty">
+      No changes were found between these two snapshots. There is nothing to rank.
+    </p>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Changes by type</h2>
+      {% if by_type %}
+      <span class="count">{{ "{:,}".format(total_changes) }} pairs</span>
+      {% endif %}
+    </div>
+    {% if by_type %}
+    <table class="tally">
+      <thead>
+        <tr>
+          <th scope="col">Change type</th>
+          <th scope="col" class="num">Drug and plan pairs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in by_type %}
+        <tr>
+          <td>{{ entry.label }}</td>
+          <td class="num">{{ "{:,}".format(entry.count) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note" style="margin: var(--s-4) 0 0">
+      Ordered by frequency. One drug and plan pair can carry several change types at once, so these
+      counts add up to more than the number of changes.
+    </p>
+    {% else %}
+    <p class="empty">No changes of any type. There is nothing to roll up.</p>
+    {% endif %}
+  </section>
+
+  <footer class="colophon">
+    <p>
+      Produced by rxdelta from the CMS Part D formulary, plan information and beneficiary cost
+      files. Thresholds, tier labels, code mappings and severity weights read from
+      <span class="mono">{{ config_path }}</span>. Cost figures are scaled to a
+      {{ normalize_days }} day supply and span preferred, non preferred and mail order pharmacies
+      at every published supply length.
+    </p>
+  </footer>
+
+</main>
+</body>
+</html>

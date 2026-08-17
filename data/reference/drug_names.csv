@@ -1,0 +1,649 @@
+rxcui,name,source,fetched_at
+200010,Telmisarox 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200011,Ursodiol 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200020,Elvatinib 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200021,Fenoxadil 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200030,Pravastene 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200031,Quetiaprin 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200040,Amlodrine 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200041,Benzatide 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200043,Dexoprofen 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200050,Lansoprine 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200060,Valcyclor 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200061,Warfarixin 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200070,Glimeprost 50 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200101,Olanzepine 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200132,Valcyclor 100 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200163,Dexoprofen 250 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200194,Lansoprine 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+200225,Sitaglinor 5 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+200256,Amlodrine 2.5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200287,Hydralium 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200318,Pravastene 10 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200349,Warfarixin 20 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200380,Elvatinib 40 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200411,Metfornix 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200442,Telmisarox 75 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200473,Benzatide 200 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200504,Irbesartil 250 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200566,Xylometrin 5 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+200597,Fenoxadil 2.5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200628,Naltrexil 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200659,Ursodiol 10 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200690,Carvistan 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200721,Ketorolan 40 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200752,Rosuvadex 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200783,Zafirlukan 75 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200814,Glimeprost 200 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200845,Olanzepine 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200876,Valcyclor 500 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+200907,Dexoprofen 10 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+200938,Lansoprine 2.5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+200969,Sitaglinor 5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201000,Amlodrine 20 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201031,Hydralium 25 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201062,Pravastene 40 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201093,Warfarixin 50 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201124,Elvatinib 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201155,Metfornix 200 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201186,Telmisarox 250 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201217,Benzatide 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201248,Irbesartil 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+201279,Quetiaprin 2.5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201310,Xylometrin 5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201341,Fenoxadil 20 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201372,Naltrexil 25 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201403,Ursodiol 40 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201465,Ketorolan 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201496,Rosuvadex 200 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201527,Zafirlukan 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201558,Glimeprost 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201589,Olanzepine 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+201620,Valcyclor 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201651,Dexoprofen 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201682,Lansoprine 20 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201713,Sitaglinor 25 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201744,Amlodrine 50 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201775,Hydralium 75 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201806,Pravastene 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201837,Warfarixin 200 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201868,Elvatinib 500 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201899,Metfornix 5 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201930,Telmisarox 10 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+201961,Benzatide 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+201992,Irbesartil 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202023,Quetiaprin 20 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202054,Xylometrin 25 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202085,Fenoxadil 50 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202116,Naltrexil 75 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202147,Ursodiol 100 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202178,Carvistan 250 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202209,Ketorolan 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202240,Rosuvadex 5 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202271,Zafirlukan 10 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+202302,Glimeprost 5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202364,Valcyclor 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202395,Dexoprofen 40 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202426,Lansoprine 50 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202457,Sitaglinor 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202488,Amlodrine 200 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202519,Hydralium 250 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202550,Pravastene 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202581,Warfarixin 5 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+202612,Elvatinib 2.5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202643,Metfornix 5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202674,Telmisarox 10 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202705,Benzatide 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202736,Irbesartil 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202767,Quetiaprin 50 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202798,Xylometrin 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202829,Fenoxadil 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202860,Naltrexil 250 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202891,Ursodiol 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+202953,Ketorolan 2.5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+202984,Rosuvadex 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203015,Zafirlukan 10 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203046,Glimeprost 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203077,Olanzepine 40 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203108,Valcyclor 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203139,Dexoprofen 100 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203170,Lansoprine 200 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203201,Sitaglinor 250 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203263,Hydralium 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+203294,Pravastene 2.5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203325,Warfarixin 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203356,Elvatinib 20 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203387,Metfornix 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203418,Telmisarox 40 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203449,Benzatide 75 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203480,Irbesartil 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203511,Quetiaprin 200 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203542,Xylometrin 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+203573,Fenoxadil 5 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+203604,Naltrexil 10 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+203635,Ursodiol 2.5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203666,Carvistan 10 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203697,Ketorolan 20 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203728,Rosuvadex 25 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203759,Zafirlukan 40 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203790,Glimeprost 75 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203821,Olanzepine 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203852,Valcyclor 200 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203883,Dexoprofen 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203914,Lansoprine 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203945,Sitaglinor 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+203976,Amlodrine 5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204007,Hydralium 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204038,Pravastene 20 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204069,Warfarixin 25 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204100,Elvatinib 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204162,Telmisarox 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204193,Benzatide 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204224,Irbesartil 500 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204255,Quetiaprin 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+204317,Fenoxadil 5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204348,Naltrexil 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204379,Ursodiol 20 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204410,Carvistan 40 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204441,Ketorolan 50 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204472,Rosuvadex 75 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204503,Zafirlukan 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204534,Glimeprost 250 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204565,Olanzepine 500 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204596,Valcyclor 5 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+204627,Dexoprofen 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204658,Lansoprine 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204689,Sitaglinor 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204720,Amlodrine 25 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204751,Hydralium 40 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204782,Pravastene 50 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204813,Warfarixin 75 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204844,Elvatinib 200 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204875,Metfornix 250 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204906,Telmisarox 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204937,Benzatide 10 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+204968,Irbesartil 2.5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+204999,Quetiaprin 5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205010,Carvistan 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205011,Dexoprofen 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205020,Naltrexil 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205021,Olanzepine 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205031,Zafirlukan 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205040,Irbesartil 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205041,Ketorolan 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205042,Lansoprine 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205043,Metfornix 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205050,Telmisarox 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205060,Elvatinib 25 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205061,Fenoxadil 25 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205070,Pravastene 25 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205101,Warfarixin 40 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205138,Lansoprine 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205212,Naltrexil 250 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205249,Benzatide 5 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205286,Pravastene 10 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+205323,Dexoprofen 5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205360,Rosuvadex 10 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205397,Fenoxadil 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205434,Telmisarox 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205471,Hydralium 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205508,Valcyclor 100 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205545,Ketorolan 250 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205582,Xylometrin 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+205619,Metfornix 10 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+205656,Amlodrine 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205693,Olanzepine 10 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205730,Carvistan 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205767,Quetiaprin 40 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205804,Elvatinib 75 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205841,Sitaglinor 100 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205878,Glimeprost 250 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205952,Irbesartil 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+205989,Warfarixin 2.5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206026,Lansoprine 10 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206063,Zafirlukan 20 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206100,Naltrexil 40 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206137,Benzatide 75 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206174,Pravastene 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206211,Dexoprofen 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+206285,Fenoxadil 10 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+206322,Telmisarox 2.5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206359,Hydralium 10 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206396,Valcyclor 20 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206433,Ketorolan 40 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206470,Xylometrin 50 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206507,Metfornix 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206544,Amlodrine 250 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206581,Olanzepine 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206618,Carvistan 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+206655,Quetiaprin 2.5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206692,Elvatinib 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206729,Sitaglinor 20 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206766,Glimeprost 40 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206803,Ursodiol 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206840,Irbesartil 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206877,Warfarixin 200 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206914,Lansoprine 500 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206951,Zafirlukan 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+206988,Naltrexil 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207025,Benzatide 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207062,Pravastene 20 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207099,Dexoprofen 40 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207136,Rosuvadex 50 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207173,Fenoxadil 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207210,Telmisarox 200 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207247,Hydralium 500 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207284,Valcyclor 5 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+207358,Xylometrin 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207395,Metfornix 20 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207432,Amlodrine 40 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207469,Olanzepine 50 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207506,Carvistan 100 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207543,Quetiaprin 200 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207580,Elvatinib 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207617,Sitaglinor 5 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+207654,Glimeprost 2.5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207691,Ursodiol 5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207728,Irbesartil 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207765,Warfarixin 25 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207802,Lansoprine 50 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207839,Zafirlukan 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207876,Naltrexil 200 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207913,Benzatide 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207950,Pravastene 5 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+207987,Dexoprofen 2.5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208024,Rosuvadex 5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208061,Fenoxadil 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208098,Telmisarox 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208135,Hydralium 50 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208172,Valcyclor 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208209,Ketorolan 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208246,Xylometrin 250 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+208283,Metfornix 5 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+208320,Amlodrine 2.5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208357,Olanzepine 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208431,Quetiaprin 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208468,Elvatinib 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208505,Sitaglinor 75 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208542,Glimeprost 200 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208579,Ursodiol 250 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208616,Irbesartil 5 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208653,Warfarixin 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+208690,Lansoprine 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208727,Zafirlukan 10 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208764,Naltrexil 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208801,Benzatide 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208838,Pravastene 75 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208875,Dexoprofen 200 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208912,Rosuvadex 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+208949,Fenoxadil 5 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+208986,Telmisarox 10 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+209023,Hydralium 5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209060,Valcyclor 10 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209097,Ketorolan 25 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209134,Xylometrin 40 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209171,Metfornix 75 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209208,Amlodrine 200 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209245,Olanzepine 250 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209282,Carvistan 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209319,Quetiaprin 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+209356,Elvatinib 5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209393,Sitaglinor 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209430,Glimeprost 25 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209504,Irbesartil 75 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209541,Warfarixin 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209578,Lansoprine 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209652,Naltrexil 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+209689,Benzatide 5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209726,Pravastene 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209763,Dexoprofen 25 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209800,Rosuvadex 40 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209837,Fenoxadil 75 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209874,Telmisarox 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209911,Hydralium 250 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209948,Valcyclor 500 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+209985,Ketorolan 10 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+210010,Lansoprine 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210011,Metfornix 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210020,Valcyclor 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210021,Warfarixin 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210030,Glimeprost 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210031,Hydralium 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210040,Rosuvadex 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210041,Sitaglinor 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210042,Telmisarox 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210043,Ursodiol 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210050,Carvistan 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210060,Naltrexil 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210061,Olanzepine 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210070,Xylometrin 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210101,Fenoxadil 25 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210144,Amlodrine 50 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210187,Ursodiol 75 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210230,Pravastene 200 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210273,Ketorolan 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210316,Elvatinib 10 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+210359,Zafirlukan 2.5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210402,Telmisarox 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210445,Olanzepine 25 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210488,Irbesartil 50 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210531,Dexoprofen 100 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210574,Xylometrin 200 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210617,Sitaglinor 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210660,Naltrexil 10 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+210703,Hydralium 5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+210746,Carvistan 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+210789,Warfarixin 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+210832,Rosuvadex 50 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+210875,Metfornix 100 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+210918,Glimeprost 250 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+210961,Benzatide 5 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+211047,Quetiaprin 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211090,Lansoprine 20 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211133,Fenoxadil 40 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211176,Amlodrine 75 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211219,Ursodiol 100 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211262,Pravastene 250 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211305,Ketorolan 5 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+211348,Elvatinib 2.5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211391,Zafirlukan 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211434,Telmisarox 20 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211477,Olanzepine 40 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211520,Irbesartil 75 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211563,Dexoprofen 200 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211606,Xylometrin 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+211649,Sitaglinor 5 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+211692,Naltrexil 2.5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211735,Hydralium 10 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211778,Carvistan 25 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211821,Warfarixin 40 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211864,Rosuvadex 75 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211907,Metfornix 200 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211950,Glimeprost 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+211993,Benzatide 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+212036,Valcyclor 2.5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212079,Quetiaprin 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212122,Lansoprine 25 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212165,Fenoxadil 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212208,Amlodrine 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212294,Pravastene 500 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212337,Ketorolan 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+212380,Elvatinib 5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212423,Zafirlukan 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212466,Telmisarox 25 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212509,Olanzepine 50 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212552,Irbesartil 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212595,Dexoprofen 250 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212638,Xylometrin 500 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212681,Sitaglinor 10 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+212767,Hydralium 20 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+212810,Carvistan 40 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+212853,Warfarixin 50 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+212896,Rosuvadex 100 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+212939,Metfornix 250 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+212982,Glimeprost 5 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+213068,Valcyclor 5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+213111,Quetiaprin 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+213154,Lansoprine 40 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+213197,Fenoxadil 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+213283,Ursodiol 250 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+213326,Pravastene 5 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+213369,Ketorolan 2.5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+213412,Elvatinib 10 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+213455,Zafirlukan 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+213541,Olanzepine 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+213584,Irbesartil 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+213627,Dexoprofen 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+213670,Xylometrin 5 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+213713,Sitaglinor 2.5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+213756,Naltrexil 10 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+213799,Hydralium 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+213842,Carvistan 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+213885,Warfarixin 75 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+213928,Rosuvadex 200 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+213971,Metfornix 500 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+214014,Glimeprost 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+214057,Benzatide 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214100,Valcyclor 10 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214143,Quetiaprin 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214186,Lansoprine 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214229,Fenoxadil 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214272,Amlodrine 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214315,Ursodiol 500 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+214358,Pravastene 10 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+214401,Ketorolan 5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+214444,Elvatinib 20 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+214487,Zafirlukan 25 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+214573,Olanzepine 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+214616,Irbesartil 250 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+214702,Xylometrin 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+214788,Naltrexil 20 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+214831,Hydralium 40 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+214874,Carvistan 75 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+214917,Warfarixin 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+214960,Rosuvadex 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215010,Telmisarox 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215011,Ursodiol 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215020,Elvatinib 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215021,Fenoxadil 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215030,Pravastene 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215031,Quetiaprin 10 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+215040,Amlodrine 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215041,Benzatide 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215042,Carvistan 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215043,Dexoprofen 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215050,Lansoprine 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215060,Valcyclor 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215061,Warfarixin 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215070,Glimeprost 5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215101,Olanzepine 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215150,Pravastene 25 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215199,Quetiaprin 50 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215248,Rosuvadex 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215297,Sitaglinor 250 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215346,Telmisarox 5 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+215395,Ursodiol 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215444,Valcyclor 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215493,Warfarixin 25 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215542,Xylometrin 50 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215591,Zafirlukan 100 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215640,Amlodrine 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215689,Benzatide 10 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+215738,Carvistan 5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+215787,Dexoprofen 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+215836,Elvatinib 40 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+215885,Fenoxadil 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+215983,Hydralium 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+216032,Irbesartil 10 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+216081,Ketorolan 5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+216130,Lansoprine 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+216179,Metfornix 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+216228,Naltrexil 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+216277,Olanzepine 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+216326,Pravastene 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+216375,Quetiaprin 10 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+216424,Rosuvadex 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216473,Sitaglinor 20 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216522,Telmisarox 40 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216571,Ursodiol 75 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216620,Valcyclor 200 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216669,Warfarixin 500 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216718,Xylometrin 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+216767,Zafirlukan 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+216816,Amlodrine 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+216865,Benzatide 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+216914,Carvistan 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+216963,Dexoprofen 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+217012,Elvatinib 5 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+217061,Fenoxadil 2.5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+217110,Glimeprost 10 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+217208,Irbesartil 50 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+217257,Ketorolan 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+217306,Lansoprine 250 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+217404,Naltrexil 2.5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217453,Olanzepine 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217502,Pravastene 25 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217551,Quetiaprin 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217600,Rosuvadex 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217649,Sitaglinor 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217698,Telmisarox 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+217747,Ursodiol 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+217796,Valcyclor 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+217845,Warfarixin 25 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+217894,Xylometrin 50 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+217943,Zafirlukan 100 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+217992,Amlodrine 500 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+218041,Benzatide 10 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+218090,Carvistan 5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218139,Dexoprofen 20 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218188,Elvatinib 40 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218237,Fenoxadil 75 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218286,Glimeprost 200 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218335,Hydralium 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218384,Irbesartil 10 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+218433,Ketorolan 5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218482,Lansoprine 20 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218531,Metfornix 40 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218580,Naltrexil 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218629,Olanzepine 200 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218678,Pravastene 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218727,Quetiaprin 10 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+218825,Sitaglinor 20 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+218874,Telmisarox 40 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+218923,Ursodiol 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+218972,Valcyclor 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+219021,Warfarixin 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+219070,Xylometrin 10 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+219119,Zafirlukan 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+219168,Amlodrine 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+219217,Benzatide 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+219266,Carvistan 100 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+219315,Dexoprofen 250 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+219364,Elvatinib 5 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+219413,Fenoxadil 2.5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+219462,Glimeprost 10 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+219511,Hydralium 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+219560,Irbesartil 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+219609,Ketorolan 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+219658,Lansoprine 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+219707,Metfornix 5 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+219756,Naltrexil 2.5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+219805,Olanzepine 10 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+219854,Pravastene 25 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+219903,Quetiaprin 50 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+219952,Rosuvadex 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220010,Carvistan 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220011,Dexoprofen 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220020,Naltrexil 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220021,Olanzepine 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220030,Xylometrin 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220031,Zafirlukan 500 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220040,Irbesartil 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220041,Ketorolan 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220042,Lansoprine 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220043,Metfornix 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220050,Telmisarox 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220060,Elvatinib 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220061,Fenoxadil 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220070,Pravastene 10 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+220101,Warfarixin 2.5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+220156,Elvatinib 20 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+220211,Metfornix 40 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+220266,Telmisarox 75 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+220321,Benzatide 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+220376,Irbesartil 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+220431,Quetiaprin 2.5 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+220486,Xylometrin 10 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+220541,Fenoxadil 40 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+220596,Naltrexil 75 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+220651,Ursodiol 200 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+220706,Carvistan 5 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+220761,Ketorolan 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+220816,Rosuvadex 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+220871,Zafirlukan 25 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+220926,Glimeprost 75 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+220981,Olanzepine 200 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+221036,Valcyclor 500 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+221091,Dexoprofen 2.5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221146,Lansoprine 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221201,Sitaglinor 25 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221256,Amlodrine 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221311,Hydralium 200 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221366,Pravastene 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221421,Warfarixin 10 MG/ML oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+221476,Elvatinib 10 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+221586,Telmisarox 50 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+221641,Benzatide 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+221696,Irbesartil 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+221751,Quetiaprin 10 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+221806,Xylometrin 5 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+221861,Fenoxadil 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+221916,Naltrexil 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+221971,Ursodiol 100 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+222026,Carvistan 500 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+222081,Ketorolan 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+222136,Rosuvadex 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+222191,Zafirlukan 20 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+222246,Glimeprost 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+222301,Olanzepine 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+222356,Valcyclor 250 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+222411,Dexoprofen 10 MG/ML oral injection,synthetic,2025-02-01T00:00:00+00:00
+222466,Lansoprine 5 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+222521,Sitaglinor 20 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+222576,Amlodrine 50 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+222631,Hydralium 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+222686,Pravastene 250 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+222741,Warfarixin 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+222796,Elvatinib 5 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+222851,Metfornix 20 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+222906,Telmisarox 40 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+222961,Benzatide 100 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+223016,Irbesartil 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+223071,Quetiaprin 5 MG/ML oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+223181,Fenoxadil 20 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+223236,Naltrexil 40 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+223291,Ursodiol 75 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+223346,Carvistan 250 MG oral tablet,synthetic,2025-02-01T00:00:00+00:00
+223401,Ketorolan 5 MG/ML oral tablet,synthetic,2025-02-01T00:00:00+00:00
+223456,Rosuvadex 2.5 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+223511,Zafirlukan 10 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+223566,Glimeprost 40 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+223621,Olanzepine 75 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+223676,Valcyclor 200 MG oral capsule,synthetic,2025-02-01T00:00:00+00:00
+223731,Dexoprofen 5 MG/ML oral capsule,synthetic,2025-02-01T00:00:00+00:00
+223786,Lansoprine 2.5 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+223841,Sitaglinor 10 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+223896,Amlodrine 40 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+223951,Hydralium 75 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+224006,Pravastene 200 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+224061,Warfarixin 500 MG oral extended release tablet,synthetic,2025-02-01T00:00:00+00:00
+224116,Elvatinib 2.5 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+224171,Metfornix 10 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+224226,Telmisarox 25 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+224281,Benzatide 75 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+224336,Irbesartil 200 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+224391,Quetiaprin 500 MG oral solution,synthetic,2025-02-01T00:00:00+00:00
+224446,Xylometrin 10 MG/ML oral solution,synthetic,2025-02-01T00:00:00+00:00
+224501,Fenoxadil 10 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+224556,Naltrexil 25 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+224611,Ursodiol 50 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+224666,Carvistan 200 MG oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+224776,Rosuvadex 10 MG/ML oral delayed release capsule,synthetic,2025-02-01T00:00:00+00:00
+224831,Zafirlukan 5 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+224886,Glimeprost 25 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+224941,Olanzepine 50 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+224996,Valcyclor 100 MG oral injection,synthetic,2025-02-01T00:00:00+00:00
+900000,Amlodrine 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+900001,Benzatide 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+900002,Carvistan 100 MG oral suspension,synthetic,2025-02-01T00:00:00+00:00
+900100,Elvatinib 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+900101,Fenoxadil 5 MG/ML oral suspension,synthetic,2025-02-01T00:00:00+00:00
+900200,Irbesartil 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900201,Ketorolan 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900202,Lansoprine 10 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900300,Naltrexil 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900301,Olanzepine 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900302,Pravastene 50 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900400,Rosuvadex 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900401,Sitaglinor 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
+900402,Telmisarox 250 MG oral topical cream,synthetic,2025-02-01T00:00:00+00:00
