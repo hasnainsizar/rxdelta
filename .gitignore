@@ -30,16 +30,5 @@ data/*
 /report.html
 /ci-report.html
 
-# Design tooling installed into the repo by `npx impeccable install`. These are
-# vendored copies of a third party toolchain, 6MB of it, not project source.
-# PRODUCT.md is deliberately NOT ignored: it is the brief the report's design is
-# accountable to. See DECISIONS.md.
-.claude/skills/impeccable/
-.github/skills/
-.github/agents/
-.github/hooks/
-.impeccable/
-.impeccable.md
-
 .env
 .DS_Store
