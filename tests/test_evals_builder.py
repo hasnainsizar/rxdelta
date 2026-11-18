@@ -166,7 +166,8 @@ def test_gold_counts_agree_with_count_changes(
             expected = gold.count_drugs(conn, args)
             result = call_tool("count_changes", tool_args, ctx)
             if isinstance(expected, NoDataAnswer):
-                assert not result.ok
+                assert result.ok and result.data is not None
+                assert result.data.totals.rows == 0
             else:
                 assert isinstance(expected, CountAnswer)
                 assert result.data is not None
@@ -187,7 +188,7 @@ def test_gold_coverage_agrees_with_get_coverage(ask_db: Path, ctx: ToolContext) 
                     ctx,
                 )
                 if isinstance(expected, NoDataAnswer):
-                    assert result.error is not None and result.error.code == "no_results"
+                    assert result.ok and result.data is not None and result.data.rows == []
                     continue
                 assert isinstance(expected, CoverageAnswer) and result.data is not None
                 (row,) = result.data.rows
@@ -239,7 +240,7 @@ def test_gold_cost_agrees_with_estimate_cost_change(
                     ctx,
                 )
                 if isinstance(expected, NoDataAnswer):
-                    assert not result.ok
+                    assert result.ok and result.data is not None and result.data.plans == []
                     continue
                 assert isinstance(expected, CostRangeAnswer)
                 assert result.data is not None and result.data.change is not None

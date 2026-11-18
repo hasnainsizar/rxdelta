@@ -180,12 +180,12 @@ def get_coverage(args: GetCoverageInput, ctx: ToolContext) -> ToolResult[GetCove
         where = f"formulary {formulary_id}" if formulary_id else "any loaded formulary"
         if plan_label:
             where += f" (used by plan {plan_label})"
-        return failure(
-            ErrorCode.NO_RESULTS,
-            f"{name} is not on {where} in {args.month}, so it is not covered there.",
+        return success(
+            data,
             provenance,
-            data=data,
             total=0,
+            shown=0,
+            note=f"{name} is not on {where} in {args.month}, so it is not covered there.",
         )
     note = None
     if len(detail) > len(shown):

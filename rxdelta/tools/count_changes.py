@@ -16,7 +16,7 @@ from rxdelta.tools.changes_core import (
     empty_note,
 )
 from rxdelta.tools.context import ToolContext
-from rxdelta.tools.envelope import ErrorCode, Provenance, ToolResult, cap_note, failure, success
+from rxdelta.tools.envelope import Provenance, ToolResult, cap_note, failure, success
 
 NAME = "count_changes"
 DESCRIPTION = (
@@ -121,7 +121,7 @@ def count_changes(args: CountChangesInput, ctx: ToolContext) -> ToolResult[Count
         totals=_counts(rows),
     )
     if not rows:
-        return failure(ErrorCode.NO_RESULTS, empty_note(args), provenance, data=data, total=0)
+        return success(data, provenance, total=0, shown=0, note=empty_note(args))
     note = None
     if len(groups) > len(shown):
         note = cap_note(

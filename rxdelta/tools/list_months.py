@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from rxdelta.tools.common import ToolInput, loaded_months
 from rxdelta.tools.context import ToolContext
-from rxdelta.tools.envelope import ErrorCode, Provenance, ToolResult, failure, success
+from rxdelta.tools.envelope import Provenance, ToolResult, success
 
 NAME = "list_months"
 DESCRIPTION = (
@@ -66,12 +66,12 @@ def list_months(args: ListMonthsInput, ctx: ToolContext) -> ToolResult[ListMonth
         latest=months[-1] if months else None,
     )
     if not months:
-        return failure(
-            ErrorCode.NO_RESULTS,
-            "No months are loaded, so there is nothing to answer from. Load one with "
-            "rxdelta load --month YYYY-MM.",
+        return success(
+            data,
             provenance,
-            data=data,
             total=0,
+            shown=0,
+            note="No months are loaded, so there is nothing to answer from. Load one with "
+            "rxdelta load --month YYYY-MM.",
         )
     return success(data, provenance, total=len(months), shown=len(months))

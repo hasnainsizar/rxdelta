@@ -48,9 +48,12 @@ no `$ref`, enums are spelled out, optional fields are omitted rather than
 nullable, and every description says what the tool does not do and gives an
 example input. `call_tool` validates arguments through the Pydantic input model;
 a bad call returns `ok=False` with `error.code = "invalid_args"` and a message
-the agent can read and fix. Other codes: `month_not_loaded`, `unknown_drug`,
-`unknown_plan`, `no_results` (the query ran and found nothing, `note` says
-why), `internal`.
+the agent can read and fix. The other failure codes are `month_not_loaded`,
+`unknown_drug`, `unknown_plan` and `internal`. A query that ran and matched
+nothing is not a failure: it returns `ok=True`, empty data, `total` 0 and a
+`note` saying why it is empty ("no changes of that kind", "not on that
+formulary"). The agent has to read the note and answer that the data says
+nothing, rather than treat an empty list as an error to retry.
 
 Pass the agent `data`, `total`, `truncated`, `note` and `error`. Keep
 `provenance` out of what the agent reads: it can be large (every row key behind a count)

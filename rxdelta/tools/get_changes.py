@@ -69,7 +69,7 @@ def get_changes(args: GetChangesInput, ctx: ToolContext) -> ToolResult[GetChange
         from_month=args.from_month, to_month=args.to_month, offset=args.offset, rows=shown
     )
     if not rows:
-        return failure(ErrorCode.NO_RESULTS, empty_note(args), provenance, data=data, total=0)
+        return success(data, provenance, total=0, shown=0, note=empty_note(args))
     if not shown:
         return failure(
             ErrorCode.INVALID_ARGS,

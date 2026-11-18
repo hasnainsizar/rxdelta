@@ -79,13 +79,18 @@ class _Session:
         )
         return result
 
-    def need(self, result: ToolResult[Any], empty: NoDataReason) -> Any:
+    def need(self, result: ToolResult[Any], fallback: NoDataReason) -> Any:
         """The data of a successful result, or stop with the matching no data reason."""
         if result.ok:
             return result.data
         code = result.error.code.value if result.error else "internal"
-        reason = _REASONS.get(code, empty)
-        raise _NoDataError(reason, result.note or "No data.")
+        raise _NoDataError(_REASONS.get(code, fallback), result.note or "No data.")
+
+    @staticmethod
+    def stop_if_empty(empty: bool, result: ToolResult[Any], reason: NoDataReason) -> None:
+        """A query that ran and found nothing ends the run with a no data answer."""
+        if empty:
+            raise _NoDataError(reason, result.note or "Nothing matched.")
 
     def months(self, args: dict[str, Any]) -> tuple[str, str]:
         start, end = str(args["from"]), str(args["to"])
@@ -124,6 +129,7 @@ class _Session:
         while True:
             result = self.call("get_changes", offset=len(rows), limit=100, **filters)
             data = self.need(result, NoDataReason.no_matching_changes)
+            self.stop_if_empty(not data.rows and not rows, result, NoDataReason.no_matching_changes)
             rows += data.rows
             if len(rows) >= (result.total or 0):
                 return rows
@@ -206,6 +212,7 @@ class OracleRunner:
             plan_id=args.get("plan_id"),
         )
         data = s.need(result, NoDataReason.not_on_formulary)
+        s.stop_if_empty(not data.rows, result, NoDataReason.not_on_formulary)
         row = data.rows[0]
         c = row.coverage
         answer = CoverageAnswer(
@@ -281,10 +288,9 @@ class OracleRunner:
 
     def _count_drugs(self, s: _Session, args: dict[str, Any]) -> tuple[StructuredAnswer, str]:
         start, end, filters = self._list_filters(s, args)
-        data = s.need(
-            s.call("count_changes", group_by="change_type", **filters),
-            NoDataReason.no_matching_changes,
-        )
+        result = s.call("count_changes", group_by="change_type", **filters)
+        data = s.need(result, NoDataReason.no_matching_changes)
+        s.stop_if_empty(data.totals.rows == 0, result, NoDataReason.no_matching_changes)
         drugs = data.totals.drugs
         return CountAnswer(count=drugs, unit="drugs"), (
             f"{drugs} drugs match between {start} and {end}."
@@ -292,17 +298,16 @@ class OracleRunner:
 
     def _cost_change(self, s: _Session, args: dict[str, Any]) -> tuple[StructuredAnswer, str]:
         rxcuis, _ = s.drug(str(args["drug"]))
-        data = s.need(
-            s.call(
-                "estimate_cost_change",
-                rxcui=rxcuis[0],
-                from_month=args["from"],
-                to_month=args["to"],
-                plan_id=args.get("plan_id"),
-                formulary_id=args.get("formulary_id"),
-            ),
-            NoDataReason.not_on_formulary,
+        result = s.call(
+            "estimate_cost_change",
+            rxcui=rxcuis[0],
+            from_month=args["from"],
+            to_month=args["to"],
+            plan_id=args.get("plan_id"),
+            formulary_id=args.get("formulary_id"),
         )
+        data = s.need(result, NoDataReason.not_on_formulary)
+        s.stop_if_empty(not data.plans, result, NoDataReason.not_on_formulary)
         if data.change is None:
             raise _NoDataError(NoDataReason.no_matching_changes, "The change is not priced.")
         low, high = data.change.low, data.change.high
@@ -331,7 +336,7 @@ class OracleRunner:
         lines = []
         for rxcui in answer.rxcuis:
             result = s.call("get_coverage", rxcui=rxcui, month=end, formulary_id=formulary)
-            if result.ok and result.data is not None:
+            if result.ok and result.data is not None and result.data.rows:
                 tiers[rxcui] = result.data.rows[0].coverage.tier
                 lines.append(f"{result.data.display_name} is on tier {tiers[rxcui]} now.")
         return answer.model_copy(update={"tiers": tiers}), " ".join([text, *lines])
@@ -346,7 +351,7 @@ class OracleRunner:
         keep = []
         for rxcui in sorted({r.rxcui for r in rows}):
             result = s.call("get_coverage", rxcui=rxcui, month=end, formulary_id=target)
-            covered = result.ok and result.data is not None
+            covered = result.ok and result.data is not None and bool(result.data.rows)
             if "covered" in test and covered != bool(test["covered"]):
                 continue
             checks = {k: v for k, v in test.items() if k != "covered"}

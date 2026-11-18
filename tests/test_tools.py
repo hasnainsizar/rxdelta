@@ -42,14 +42,19 @@ def assert_error(result: ToolResult[Any], code: ErrorCode, text: str) -> None:
     assert text in (result.note or ""), result.note
 
 
+def assert_empty(result: ToolResult[Any], text: str) -> None:
+    """A query that ran and matched nothing: a success with a plain note."""
+    assert result.ok, result.error
+    assert result.error is None
+    assert result.total == 0 and not result.truncated
+    assert text in (result.note or ""), result.note
+
+
 def all_changes(ctx: ToolContext, **filters: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     while True:
         result = call(ctx, "get_changes", offset=len(rows), limit=100, **filters)
-        if not result.ok:
-            assert result.error is not None and result.error.code == ErrorCode.NO_RESULTS
-            return rows
-        assert result.data is not None
+        assert result.ok and result.data is not None, result.note
         rows += [r.model_dump(mode="json") for r in result.data.rows]
         if not result.truncated or len(rows) >= (result.total or 0):
             return rows
@@ -88,7 +93,7 @@ def test_list_months_happy_path(ctx: ToolContext) -> None:
 def test_list_months_on_an_empty_database_says_why(tmp_path: Path, config: Config) -> None:
     connect(tmp_path / "e.db").close()
     result = call_tool("list_months", {}, ToolContext(tmp_path / "e.db", config))
-    assert_error(result, ErrorCode.NO_RESULTS, "No months are loaded")
+    assert_empty(result, "No months are loaded")
     assert result.data is not None and result.data.months == []
 
 
@@ -192,7 +197,8 @@ def test_get_coverage_summary_without_a_filter(ctx: ToolContext) -> None:
 
 def test_get_coverage_not_on_formulary_is_an_honest_empty(ctx: ToolContext) -> None:
     result = call(ctx, "get_coverage", rxcui="8800191", month="2026-01", formulary_id=F2)
-    assert_error(result, ErrorCode.NO_RESULTS, f"is not on formulary {F2} in 2026-01")
+    assert_empty(result, f"is not on formulary {F2} in 2026-01")
+    assert result.data is not None and result.data.rows == []
 
 
 def test_get_coverage_errors(ctx: ToolContext) -> None:
@@ -271,7 +277,7 @@ def test_get_changes_empty_result_explains(ctx: ToolContext) -> None:
         rxcuis=["8800271"],
         formulary_ids=[F1],
     )
-    assert_error(result, ErrorCode.NO_RESULTS, "nothing of that kind changed")
+    assert_empty(result, "nothing of that kind changed")
     assert result.data is not None and result.data.rows == []
 
 
@@ -388,7 +394,7 @@ def test_count_changes_empty_and_errors(ctx: ToolContext) -> None:
         rxcuis=["8800271"],
         formulary_ids=[F1],
     )
-    assert_error(empty, ErrorCode.NO_RESULTS, "No changes match")
+    assert_empty(empty, "No changes match")
     assert empty.data is not None and empty.data.totals.rows == 0
     assert_error(
         call(ctx, "count_changes", from_month="2026-01", to_month="2026-02", group_by="plan"),
@@ -453,18 +459,17 @@ def test_estimate_cost_change_without_a_tier_move_is_zero(ctx: ToolContext) -> N
 
 
 def test_estimate_cost_change_empty_and_errors(ctx: ToolContext) -> None:
-    assert_error(
-        call(
-            ctx,
-            "estimate_cost_change",
-            rxcui="8800191",
-            from_month="2026-01",
-            to_month="2026-02",
-            plan_id="H5678-001",
-        ),
-        ErrorCode.NO_RESULTS,
-        "no cost sharing to compare",
+    empty_cost = call(
+        ctx,
+        "estimate_cost_change",
+        rxcui="8800191",
+        from_month="2026-01",
+        to_month="2026-02",
+        plan_id="H5678-001",
     )
+    assert_empty(empty_cost, "no cost sharing to compare")
+    assert empty_cost.data is not None and empty_cost.data.plans == []
+    assert empty_cost.data.change is None and not empty_cost.data.priced
     assert_error(
         call(
             ctx, "estimate_cost_change", rxcui="8800151", from_month="2026-01", to_month="2026-02"
@@ -602,3 +607,13 @@ def test_tools_cli(ask_db: Path) -> None:
     assert json.loads(called.output)["data"]["products"][0]["rxcuis"] == ["8800141"]
     broken = runner.invoke(app, ["tool", "find_drug", "--args", "{nope", "--db", str(ask_db)])
     assert broken.exit_code == 1
+
+
+def test_only_real_failures_are_errors() -> None:
+    assert {c.value for c in ErrorCode} == {
+        "invalid_args",
+        "month_not_loaded",
+        "unknown_drug",
+        "unknown_plan",
+        "internal",
+    }

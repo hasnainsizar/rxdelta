@@ -15,7 +15,6 @@ class ErrorCode(StrEnum):
     MONTH_NOT_LOADED = "month_not_loaded"
     UNKNOWN_DRUG = "unknown_drug"
     UNKNOWN_PLAN = "unknown_plan"
-    NO_RESULTS = "no_results"
     INTERNAL = "internal"
 
 
@@ -66,8 +65,8 @@ def failure(
     data: T | None = None,
     total: int | None = None,
 ) -> ToolResult[T]:
-    """ok=False. `no_results` still carries data, so the empty shape and the
-    reason travel together."""
+    """ok=False: the call itself could not be answered as asked. A query that
+    ran and matched nothing is a success with empty data, never a failure."""
     return ToolResult[T](
         ok=False,
         data=data,

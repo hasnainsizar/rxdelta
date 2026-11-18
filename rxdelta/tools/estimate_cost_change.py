@@ -241,11 +241,33 @@ def estimate_cost_change(
     provenance.row_keys = keys
     where = f"plan {args.plan_id}" if args.plan_id else f"formulary {args.formulary_id}"
     if not plans:
-        return failure(
-            ErrorCode.NO_RESULTS,
-            f"{name} is not on {where} in {args.from_month} or {args.to_month}, so there is "
-            "no cost sharing to compare.",
+        empty = EstimateCostOutput(
+            rxcui=args.rxcui,
+            display_name=name,
+            from_month=args.from_month,
+            to_month=args.to_month,
+            formulary_id=args.formulary_id,
+            plan_id=args.plan_id,
+            tier_before=None,
+            tier_after=None,
+            tier_changed=False,
+            before=None,
+            after=None,
+            change=None,
+            open_ended=False,
+            priced=False,
+            basis="the drug is not on this formulary in either month",
+            plans=[],
+            leaves_out=list(LIMITATIONS),
+            estimate_note=ESTIMATE_NOTE,
+        )
+        return success(
+            empty,
             provenance,
+            total=0,
+            shown=0,
+            note=f"{name} is not on {where} in {args.from_month} or {args.to_month}, so there "
+            "is no cost sharing to compare.",
         )
     tiers_before = {p.tier_before for p in plans}
     tiers_after = {p.tier_after for p in plans}

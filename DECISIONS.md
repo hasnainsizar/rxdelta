@@ -728,13 +728,25 @@ that shares a brand name is one product; generics group by ingredient. So
 
 ### Tool layer
 
-**An empty answer is `ok=False` with code `no_results`, and still carries data.**
-The envelope has one error slot and the code list includes `no_results`, so an
-empty but valid query uses it: the note says why it is empty (no changes of that
-kind, drug not on that formulary), and `data` holds the empty shape so the
-caller still sees what was searched. `unknown_drug` and `unknown_plan` are used
-when the thing itself is not found. Would change: if the Phase 2 agent works
-better with `ok=True` for empty answers, flip it in `envelope.failure`.
+> Superseded. The first version below returned `ok=False` with a `no_results`
+> code. On review that read as "the call failed", which invites an agent to
+> retry or apologize instead of answering that nothing changed.
+
+**An empty answer is a success: `ok=True`, empty data, and a plain note.** A
+query that ran and matched nothing (no changes of that kind, the drug is not on
+that formulary, no months loaded) returns its normal data shape with empty
+lists, `total` 0 and a `note` that says why. `ok=False` is kept for calls that
+could not be answered as asked: `invalid_args`, `month_not_loaded`,
+`unknown_drug`, `unknown_plan` and `internal`. The `no_results` code was
+removed, and a test pins the five that remain. The oracle now turns an empty
+success into `no_data` itself (no change rows, no coverage rows, a zero count,
+no priced plans); the scorer needed no change, because it never read the error
+code except to count `invalid_args` calls. The eval set did not change. Would
+change: nothing expected.
+
+The first version, kept for the record: an empty but valid query used
+`ok=False` with code `no_results`, the note said why it was empty, and `data`
+held the empty shape so the caller still saw what was searched.
 
 **Unknown formulary IDs return `unknown_plan`.** There is no `unknown_formulary`
 code, `find_plan` is the tool that resolves formulary IDs, and the message says
