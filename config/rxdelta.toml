@@ -337,7 +337,7 @@ worst_items = 20
 # Model used when --model is not given. Must have an [agent.models] entry.
 default_model = "claude-haiku-5-5"
 # System prompt file rxdelta/agent/prompts/system_<version>.md used by default.
-prompt_version = "v1"
+prompt_version = "v2"
 # Most output tokens one model response may use, thinking included. A change
 # answer for a drug removed from 328 formularies runs to about 15,000 tokens.
 max_tokens = 32000
