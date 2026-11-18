@@ -14,10 +14,15 @@ from typing import Annotated, Any, TypeVar
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from rxdelta import __version__
+from rxdelta.agent import ask as ask_support
 from rxdelta.agent import trace as agent_trace
+from rxdelta.agent.client import ModelClient
+from rxdelta.agent.loop import AgentRunner, AgentSettings, default_client
+from rxdelta.ask.answer import QuestionContext
 from rxdelta.config import CATEGORIES, Config, get_config
 from rxdelta.db import DEFAULT_DB_PATH, connect, queries
 from rxdelta.diff import impact
@@ -1057,6 +1062,82 @@ def eval_show(
     for record in agent_trace.find_records(run_dir, item_id):
         console.print(agent_trace.render(record), highlight=False, markup=False)
         console.print()
+
+
+def make_agent_client(config: Config) -> ModelClient:
+    """The model client ask uses. Tests replace it with a scripted one."""
+    return default_client(config)
+
+
+@app.command("ask")
+@handle_errors
+def ask_command(
+    question: Annotated[str, typer.Argument(help="The question, in plain English.")],
+    model: Annotated[str | None, typer.Option("--model", help="Model ID.")] = None,
+    from_month: Annotated[
+        str | None, typer.Option("--from", help="Earlier month, YYYY-MM.")
+    ] = None,
+    to_month: Annotated[str | None, typer.Option("--to", help="Later month, YYYY-MM.")] = None,
+    show_tools: Annotated[
+        bool, typer.Option("--show-tools", help="Print each tool call as it happens.")
+    ] = False,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the full structured output as JSON.")
+    ] = False,
+    db: Annotated[
+        Path | None,
+        typer.Option("--db", help="Database. Default: rxdelta-cms.db if present, else rxdelta.db."),
+    ] = None,
+    config_path: ConfigOption = None,
+) -> None:
+    """Answer a question about formulary changes from the loaded CMS data."""
+    config = get_config(config_path)
+    if (from_month is None) != (to_month is None):
+        raise RxdeltaError("Give both --from and --to, or neither.")
+    db_path = ask_support.choose_db(db)
+    ctx = ToolContext(db_path=db_path, config=config)
+    ask_support.check_months(ctx)
+    settings = AgentSettings.from_config(config, model=model)
+    if not as_json:
+        err_console.print(f"[dim]Using {db_path}[/dim]", highlight=False, soft_wrap=True)
+
+    def show(kind: str, payload: dict[str, Any]) -> None:
+        if kind == "tool_call":
+            args = escape(json.dumps(payload["args"], sort_keys=True))
+            summary = escape(payload["summary"])
+            err_console.print(
+                f"[cyan]{payload['name']}[/cyan] {args}\n  [dim]-> {summary}[/dim]",
+                highlight=False,
+            )
+        elif kind == "guard":
+            problems = escape("; ".join(payload["problems"]))
+            err_console.print(
+                f"[yellow]check {payload['guard']} failed[/yellow] {problems}", highlight=False
+            )
+
+    runner = AgentRunner(
+        [],
+        ctx,
+        client=make_agent_client(config),
+        settings=settings,
+        on_event=show if show_tools else None,
+    )
+    context = QuestionContext(default_from=from_month, default_to=to_month)
+    output = runner.answer(question, context)
+    if as_json:
+        console.print_json(output.model_dump_json())
+    elif output.error is None:
+        console.print(output.final_text, highlight=False, markup=False, soft_wrap=True)
+        console.print(
+            f"[dim]{ask_support.footer(output, settings.model)}[/dim]",
+            highlight=False,
+            soft_wrap=True,
+        )
+        console.print(f"[dim]{ask_support.DISCLAIMER}[/dim]", highlight=False)
+    if output.error is not None:
+        raise RxdeltaError(
+            ask_support.friendly_error(output.error, settings.max_cost_per_question_usd)
+        )
 
 
 @app.command("fetch-cms")
