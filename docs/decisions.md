@@ -265,3 +265,65 @@ made the same way and compares it byte for byte with the committed file.
 **The manifest has no timestamp.** A build time would make two identical builds
 differ. The file hash, seed, config hash and database row counts identify a
 build.
+
+## Eval harness
+
+**The oracle looks questions up by their text.** The `Runner` protocol passes
+only the question and the context, and the context must never carry gold. The
+oracle gets every item through its constructor and maps question text to gold
+query. Its constructor refuses two items that ask the same question with
+different gold queries.
+
+**A runner exception is scored wrong, never right.** The harness catches it,
+records the message in `error`, and the scorer marks the item incorrect even if
+the placeholder answer happens to match (for example a `no_data` item).
+
+**Grounding compares absolute values.** Text usually carries the sign in words
+("$5.00 less"), so `-$5.00`, `$5 less` and `5` all match a tool value of `-5.0`.
+A percentage matches either its number or its fraction (`25%` matches `0.25`).
+Values are compared rounded to cents.
+
+**What grounding does not count as a claim.** Years (1900 to 2099), `YYYY-MM`
+months, identifiers (NDCs, plan IDs like `H1234-001`, anything with three or more
+hyphenated parts or a part longer than three digits), numbers followed by a
+strength unit (`1 mg`, `100 UNT/ML`), both sides of a ratio (`75/25`), numbers
+that appear in the question, and anything inside a drug, plan or product name a
+tool returned. A short hyphenated pair (`3-4`) and "10 to 20" are ranges, and
+each end is checked. Would change: if an agent writes ranges like `3-400`, this
+rule reads it as an identifier.
+
+**A formulary ID in the text is a claim.** `00026123` is checked like any number,
+so a made-up formulary ID is caught. It matches the tool's `"00026123"` because
+both normalize to the same value.
+
+**The worst items section lists failures first, then ungrounded passes, and
+stops.** When every item is right and grounded the section says so instead of
+showing correct items as "worst".
+
+**`eval run` defaults to `--db evals.db`.** The eval set is built against the
+fixture database that `make evaldb` writes there; the default makes the
+documented command work without flags. Any other database is refused unless
+its row counts match the manifest.
+
+**A database whose row counts differ from the manifest is refused.** The prompt
+asks for a hash check on the eval file. Gold answers are also only valid for the
+database they were computed from, so the harness compares the row counts the
+manifest recorded too. Would change: a content hash of the tables, if row
+counts ever prove too weak a check.
+
+**`eval run` exits 1 when a gate fails.** `[eval].min_accuracy` and
+`[eval].max_missed_refusal_rate` are the defaults, and `--min-accuracy` and
+`--max-missed-refusal-rate` override them, which is how CI demands 100 percent
+from the oracle. The null runner fails the default gate, by design.
+
+**The eval report has its own template in the report's template folder.** It
+copies the design tokens and table rules from `report.html.j2` and embeds the
+same fonts, rather than restructuring the existing template into blocks and
+risking a change to the committed report. About forty lines of CSS are
+duplicated as a result.
+
+**The noisy runner lives in `tests/`.** It is test-only, so it is not in
+`RUNNERS` and `rxdelta eval run --runner noisy` is an error.
+
+**Run folders get a numeric suffix on a clash.** Two runs started in the same
+second (common in tests) would otherwise write into one folder.

@@ -23,6 +23,7 @@ from rxdelta.diff import impact
 from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
 from rxdelta.evals import builder as evalset_builder
+from rxdelta.evals import harness as eval_harness
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
 from rxdelta.names import fetch as names_fetch_module
@@ -913,6 +914,108 @@ def evalset_build(
             f"[yellow]{short}: {missing} fewer item(s) than the mix asks for.[/yellow] "
             "The database does not hold enough distinct facts for that category."
         )
+
+
+eval_app = typer.Typer(no_args_is_help=True, help="Score a runner against the eval set.")
+app.add_typer(eval_app, name="eval")
+
+
+def _pct(value: float | None) -> str:
+    return "n/a" if value is None else f"{100 * value:.1f}%"
+
+
+@eval_app.command("run")
+@handle_errors
+def eval_run(
+    set_path: Annotated[Path, typer.Option("--set", help="Eval set file.")] = Path(
+        "evals/rxdelta_v1.jsonl"
+    ),
+    runner_name: Annotated[str, typer.Option("--runner", help="oracle or null.")] = "oracle",
+    split: Annotated[str, typer.Option("--split", help="dev, test or all.")] = "dev",
+    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N items.")] = None,
+    category: Annotated[str | None, typer.Option("--category", help="One category.")] = None,
+    workers: Annotated[
+        int | None, typer.Option("--workers", help="Items answered in parallel.")
+    ] = None,
+    db: Annotated[Path, typer.Option("--db", help="Database the eval set was built from.")] = Path(
+        "evals.db"
+    ),
+    out_dir: Annotated[Path, typer.Option("--out-dir", help="Where run folders go.")] = Path(
+        "runs"
+    ),
+    min_accuracy: Annotated[
+        float | None, typer.Option("--min-accuracy", help="Override [eval].min_accuracy.")
+    ] = None,
+    max_missed_refusal_rate: Annotated[
+        float | None,
+        typer.Option("--max-missed-refusal-rate", help="Override [eval].max_missed_refusal_rate."),
+    ] = None,
+    config_path: ConfigOption = None,
+) -> None:
+    """Run one runner over the eval set and write results, a summary and a report."""
+    if split not in ("dev", "test", "all"):
+        raise RxdeltaError(f"--split must be dev, test or all, got {split!r}")
+    outcome = eval_harness.run(
+        set_path=set_path,
+        runner_name=runner_name,
+        split=split,
+        db_path=db,
+        config=get_config(config_path),
+        out_root=out_dir,
+        category=category,
+        limit=limit,
+        workers=workers,
+        min_accuracy=min_accuracy,
+        max_missed_refusal_rate=max_missed_refusal_rate,
+    )
+    summary = outcome.summary
+    overall = summary["overall"]
+    table = Table(title=f"{runner_name} on {split}", title_justify="left")
+    table.add_column("Category")
+    table.add_column("Items", justify="right")
+    table.add_column("Accuracy", justify="right")
+    for name, row in summary["by_category"].items():
+        table.add_row(name, str(row["items"]), _pct(row["accuracy"]))
+    console.print(table)
+    console.print(
+        f"Accuracy {_pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}). "
+        f"False refusals {overall['false_refusals']}, missed refusals "
+        f"{overall['missed_refusals']}, items with ungrounded numbers "
+        f"{summary['grounding']['items_with_ungrounded']}.",
+        highlight=False,
+    )
+    console.print(f"Wrote {outcome.directory}", highlight=False)
+    if not outcome.passed:
+        err_console.print(
+            "[bold red]gate failed[/bold red] " + "; ".join(summary["gates"]["reasons"])
+        )
+        raise typer.Exit(code=1)
+
+
+@eval_app.command("compare")
+@handle_errors
+def eval_compare(
+    run_a: Annotated[Path, typer.Argument(help="Earlier run folder.")],
+    run_b: Annotated[Path, typer.Argument(help="Later run folder.")],
+) -> None:
+    """Per category accuracy change and the items that flipped between two runs."""
+    result = eval_harness.compare(run_a, run_b)
+    table = Table(title="Accuracy by category", title_justify="left")
+    table.add_column("Category")
+    table.add_column("A", justify="right")
+    table.add_column("B", justify="right")
+    table.add_column("Change", justify="right")
+    for name, row in result.by_category.items():
+        delta = row["delta"]
+        table.add_row(
+            name,
+            _pct(row["a"]),
+            _pct(row["b"]),
+            "n/a" if delta is None else f"{100 * delta:+.1f} points",
+        )
+    console.print(table)
+    console.print(f"Right to wrong: {', '.join(result.right_to_wrong) or 'none'}", highlight=False)
+    console.print(f"Wrong to right: {', '.join(result.wrong_to_right) or 'none'}", highlight=False)
 
 
 @app.command()
