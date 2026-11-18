@@ -21,7 +21,8 @@ from rxdelta.tools.envelope import Provenance, ToolResult, cap_note, failure, su
 NAME = "count_changes"
 DESCRIPTION = (
     "Count coverage changes between two loaded months with the same filters as get_changes, "
-    "grouped by change_type, formulary_id, rxcui or tier_move (for example '3->4'). Each "
+    "grouped by change_type, formulary_id, rxcui, tier_move (for example '3->4') or "
+    "cost_direction (whether a tier move costs the member more, less or the same). Each "
     "group and the grand total give four counts: rows (drug, formulary and change type "
     "combinations), drugs (distinct RXCUIs), formularies and plans. Use this for any 'how "
     "many' question instead of counting a list. It does not list the drugs. "
@@ -35,7 +36,7 @@ EXAMPLE: dict[str, Any] = {
     "group_by": "change_type",
 }
 
-GroupBy = Literal["change_type", "formulary_id", "rxcui", "tier_move"]
+GroupBy = Literal["change_type", "formulary_id", "rxcui", "tier_move", "cost_direction"]
 
 
 class CountChangesInput(ChangeFilters):
@@ -75,6 +76,10 @@ def _group_key(row: ChangeRow, group_by: GroupBy) -> tuple[str, str]:
         return row.formulary_id, f"Formulary {row.formulary_id}"
     if group_by == "rxcui":
         return row.rxcui, row.display_name
+    if group_by == "cost_direction":
+        if row.cost_direction is None:
+            return "not_a_tier_move", "Not a tier move"
+        return row.cost_direction.value, row.cost_direction.phrase.capitalize()
     move = f"{_tier(row, 'before')}->{_tier(row, 'after')}"
     return move, f"Tier {move.replace('->', ' to ')}"
 
@@ -96,7 +101,9 @@ def count_changes(args: CountChangesInput, ctx: ToolContext) -> ToolResult[Count
         problem = check_filters(conn, args)
         if problem:
             return failure(problem[0], problem[1], provenance)
-        rows = apply_filters(all_rows(conn, ctx.db_path, args.from_month, args.to_month), args)
+        rows = apply_filters(
+            all_rows(conn, ctx.db_path, ctx.config, args.from_month, args.to_month), args
+        )
     finally:
         conn.close()
 

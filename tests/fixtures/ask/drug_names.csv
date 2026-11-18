@@ -180,3 +180,9 @@ rxcui,name_type,name
 500003,ingredient,swap compound 3
 500004,full,swap compound 4 5 MG Oral Tablet
 500004,ingredient,swap compound 4
+500011,full,cost compound 11 5 MG Oral Tablet
+500011,ingredient,cost compound 11
+500012,full,cost compound 12 5 MG Oral Tablet
+500012,ingredient,cost compound 12
+500013,full,cost compound 13 5 MG Oral Tablet
+500013,ingredient,cost compound 13

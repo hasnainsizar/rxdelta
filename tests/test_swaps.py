@@ -115,7 +115,7 @@ def test_diff_json_and_report_show_the_same_two_changes(
     diff = diff_snapshots(conn, "2026-01", "2026-02")
     rows = html.build_rows(config, build_groups(conn, config, diff))
     assert sorted((r.rxcui, r.change_types) for r in rows) == [
-        ("500002", "Tier up"),
+        ("500002", "Tier up (costs the member more)"),
         ("500003", "Drug removed"),
     ]
     page = html.render(config, diff, build_groups(conn, config, diff), generated_at="frozen")

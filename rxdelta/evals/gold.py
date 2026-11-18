@@ -35,7 +35,7 @@ from rxdelta.ask.answer import (
     StructuredAnswer,
 )
 from rxdelta.ask.values import CoverageState, change_values
-from rxdelta.config import Config
+from rxdelta.config import Config, get_config
 from rxdelta.swaps import pair_swaps
 from rxdelta.types import ChangeType
 
@@ -61,6 +61,8 @@ class GoldChange:
     tier_before: int | None
     tier_after: int | None
     plans: frozenset[str]
+    # For a tier move: "higher", "lower", "same" or "unknown" for the member's cost.
+    cost_direction: str | None = None
 
 
 # Months and plans
@@ -299,16 +301,87 @@ def _db_state(conn: sqlite3.Connection) -> tuple[str, int, int]:
     return path, stat.st_mtime_ns, stat.st_size
 
 
-def changes(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[GoldChange]:
+def changes(
+    conn: sqlite3.Connection, month_from: str, month_to: str, config: Config | None = None
+) -> list[GoldChange]:
     """Every classified change for a month pair, memoized per database file state."""
     key = (*_db_state(conn), month_from, month_to)
     with _memo_lock:
         if key not in _memo:
-            _memo[key] = _classify(conn, month_from, month_to)
+            _memo[key] = _classify(conn, config or get_config(), month_from, month_to)
         return _memo[key]
 
 
-def _classify(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[GoldChange]:
+# Cost direction, read again from the raw beneficiary cost rows.
+
+_Leg = tuple[str, float | None, float | None, float | None]
+
+
+def _month_legs(
+    conn: sqlite3.Connection, config: Config, month: str
+) -> dict[tuple[str, int], dict[tuple[str, str], _Leg]]:
+    """(plan, tier) to {(days supply, channel): (kind, amount, min, max)}."""
+    out: dict[tuple[str, int], dict[tuple[str, str], _Leg]] = defaultdict(dict)
+    for row in conn.execute(
+        "SELECT * FROM beneficiary_cost WHERE snapshot_month = ? AND coverage_level = ?",
+        (month, config.impact.coverage_level),
+    ).fetchall():
+        plan = f"{row['contract_id']}-{row['plan_id']}-{row['segment_id']}"
+        for channel in _CHANNELS:
+            code = str(row[f"cost_type_{channel}"] or "")
+            kind = config.codes.cost_type[code].kind if code else "blank"
+            out[(plan, int(row["tier"]))][(str(row["days_supply"]), channel)] = (
+                kind,
+                row[f"cost_amt_{channel}"],
+                row[f"cost_min_amt_{channel}"],
+                row[f"cost_max_amt_{channel}"],
+            )
+    return out
+
+
+def _leg_direction(old: _Leg, new: _Leg) -> str:
+    """What one channel at one supply length does, old tier to new."""
+    (old_kind, old_amount, *_), (new_kind, new_amount, *_) = old, new
+    if old_amount is None or new_amount is None:
+        return "unknown"
+    if old_kind == new_kind and old_kind in ("copay", "coinsurance"):
+        if new_amount == old_amount:
+            return "same"
+        return "higher" if new_amount > old_amount else "lower"
+    if {old_kind, new_kind} != {"copay", "coinsurance"}:
+        return "unknown"
+    # One side is a dollar copay and the other a share of a price we do not have.
+    copay_old = old_kind == "copay"
+    copay, share = (old_amount, new_amount) if copay_old else (new_amount, old_amount)
+    bounds_leg = new if copay_old else old
+    if copay == 0 and share == 0:
+        return "same"
+    if copay == 0 or share == 0:
+        copay_is_less = copay == 0
+    else:
+        bounds = [b for b in bounds_leg[2:] if b]
+        if not bounds or min(bounds) <= copay <= max(bounds):
+            return "unknown"
+        copay_is_less = copay < min(bounds)
+    new_is_less = copay_is_less != copay_old
+    return "lower" if new_is_less else "higher"
+
+
+def _tier_direction(
+    old: dict[tuple[str, str], _Leg] | None, new: dict[tuple[str, str], _Leg] | None
+) -> str:
+    if not old or not new:
+        return "unknown"
+    found = {_leg_direction(leg, new[k]) for k, leg in old.items() if k in new} - {"unknown"}
+    changed = found - {"same"}
+    if len(changed) == 1:
+        return changed.pop()
+    return "same" if found and not changed else "unknown"
+
+
+def _classify(
+    conn: sqlite3.Connection, config: Config, month_from: str, month_to: str
+) -> list[GoldChange]:
     params = {"m_from": month_from, "m_to": month_to}
     plans_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
     for plan, f_from, f_to in conn.execute(_PAIRS_SQL, params).fetchall():
@@ -349,13 +422,27 @@ def _classify(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[
     found += [(r[0], r[1], r[2], ChangeType.DRUG_REMOVED, r[3], None) for r in swaps.removals]
     found += [(r[0], r[1], r[2], ChangeType.DRUG_ADDED, None, r[4]) for r in swaps.additions]
 
+    tier_moves = (ChangeType.TIER_UP, ChangeType.TIER_DOWN)
+    legs_before = legs_after = {}
+    if any(f[3] in tier_moves for f in found):
+        legs_before = _month_legs(conn, config, month_from)
+        legs_after = _month_legs(conn, config, month_to)
+
     grouped: dict[tuple[Any, ...], set[str]] = defaultdict(set)
     tiers: dict[tuple[Any, ...], tuple[int | None, int | None]] = {}
     for f_from, f_to, rxcui, change_type, before, after in found:
         before_value, after_value = change_values(change_type, before, after)
-        key = (rxcui, f_from, f_to, change_type, before_value, after_value)
-        grouped[key] |= plans_by_pair[(f_from, f_to)]
-        tiers[key] = (before.tier if before else None, after.tier if after else None)
+        base = (rxcui, f_from, f_to, change_type, before_value, after_value)
+        tier_pair = (before.tier if before else None, after.tier if after else None)
+        for plan in plans_by_pair[(f_from, f_to)]:
+            direction = None
+            if change_type in tier_moves:
+                assert before is not None and after is not None
+                direction = _tier_direction(
+                    legs_before.get((plan, before.tier)), legs_after.get((plan, after.tier))
+                )
+            grouped[(*base, direction)].add(plan)
+            tiers[(*base, direction)] = tier_pair
     return sorted(
         (
             GoldChange(
@@ -368,10 +455,18 @@ def _classify(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[
                 tier_before=tiers[k][0],
                 tier_after=tiers[k][1],
                 plans=frozenset(p),
+                cost_direction=k[6],
             )
             for k, p in grouped.items()
         ),
-        key=lambda c: (c.formulary_to, c.rxcui, c.change_type.value, c.before or "", c.after or ""),
+        key=lambda c: (
+            c.formulary_to,
+            c.rxcui,
+            c.change_type.value,
+            c.before or "",
+            c.after or "",
+            c.cost_direction or "",
+        ),
     )
 
 

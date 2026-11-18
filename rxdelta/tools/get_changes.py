@@ -57,7 +57,9 @@ def get_changes(args: GetChangesInput, ctx: ToolContext) -> ToolResult[GetChange
         problem = check_filters(conn, args)
         if problem:
             return failure(problem[0], problem[1], provenance)
-        rows = apply_filters(all_rows(conn, ctx.db_path, args.from_month, args.to_month), args)
+        rows = apply_filters(
+            all_rows(conn, ctx.db_path, ctx.config, args.from_month, args.to_month), args
+        )
     finally:
         conn.close()
 

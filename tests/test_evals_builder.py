@@ -129,6 +129,7 @@ def test_gold_changes_agree_with_get_changes(
             c.before,
             c.after,
             len(c.plans),
+            c.cost_direction,
         )
         for c in gold.changes(conn, *pair)
     }
@@ -141,6 +142,7 @@ def test_gold_changes_agree_with_get_changes(
             r.before_value,
             r.after_value,
             r.affected_plans,
+            r.cost_direction.value if r.cost_direction else None,
         )
         for r in tool_rows(ctx, from_month=pair[0], to_month=pair[1])
     }

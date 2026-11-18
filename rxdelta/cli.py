@@ -20,6 +20,7 @@ from rxdelta import __version__
 from rxdelta.config import CATEGORIES, Config, get_config
 from rxdelta.db import DEFAULT_DB_PATH, connect, queries
 from rxdelta.diff import impact
+from rxdelta.diff.cost_direction import CostDirection
 from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
 from rxdelta.evals import builder as evalset_builder
@@ -37,7 +38,7 @@ from rxdelta.report import format as fmt
 from rxdelta.report import html
 from rxdelta.tools import registry as tool_registry
 from rxdelta.tools.context import ToolContext
-from rxdelta.types import RxdeltaError
+from rxdelta.types import ChangeType, RxdeltaError
 
 app = typer.Typer(
     add_completion=False,
@@ -176,6 +177,7 @@ def _group_payload(config: Config, group: ChangeGroup) -> dict[str, Any]:
         "tier_after": group.tier_after,
         "tier_before_label": config.tier_label(group.tier_before),
         "tier_after_label": config.tier_label(group.tier_after),
+        "cost_direction": group.cost_direction.value if group.cost_direction else None,
         "plan_count": group.plan_count,
         "plans": [str(p) for p in group.plans],
         "severity": group.severity,
@@ -208,11 +210,25 @@ def _diff_payload(config: Config, result: DiffResult, groups: list[ChangeGroup])
             "drugs_in_to": result.drugs_to,
         },
         "counts_by_change_type": {t.value: n for t, n in result.counts_by_type().items()},
+        "tier_moves_by_cost_direction": _tier_moves_by_cost(groups),
         "groups": [_group_payload(config, g) for g in groups],
         "limitations": list(LIMITATIONS),
         "estimate_note": ESTIMATE_NOTE,
         "open_ended_note": OPEN_ENDED_NOTE,
     }
+
+
+def _tier_moves_by_cost(groups: list[ChangeGroup]) -> dict[str, dict[str, int]]:
+    """Drug and plan pairs per tier move, split by what the move did to cost."""
+    out: dict[str, dict[str, int]] = {}
+    for group in groups:
+        if group.cost_direction is None:
+            continue
+        for change_type in group.change_types:
+            if change_type in (ChangeType.TIER_UP, ChangeType.TIER_DOWN):
+                row = out.setdefault(change_type.value, {d.value: 0 for d in CostDirection})
+                row[group.cost_direction.value] += group.plan_count
+    return out
 
 
 _GROUP_CSV_HEADER = [
@@ -227,6 +243,7 @@ _GROUP_CSV_HEADER = [
     "impact_open_ended",
     "impact_priced",
     "severity",
+    "cost_direction",
 ]
 
 
@@ -244,6 +261,7 @@ def _group_csv_rows(groups: list[ChangeGroup]) -> list[list[Any]]:
             int(g.impact.open_ended),
             int(g.impact.priced),
             g.severity,
+            g.cost_direction.value if g.cost_direction else "",
         ]
         for g in groups
     ]
@@ -362,7 +380,7 @@ def diff_command(
         for group in groups[:limit]:
             table.add_row(
                 fmt.ndc_display(group.ndc_11),
-                fmt.change_types(group.change_types),
+                fmt.change_label(group),
                 fmt.tier_move(config, group),
                 f"{group.plan_count:,}",
                 fmt.impact_range(group.impact),

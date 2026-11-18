@@ -741,6 +741,10 @@ def name_rows() -> list[list[str]]:
     for index in range(1, 5):
         rows.append([f"50000{index}", "full", f"swap compound {index} 5 MG Oral Tablet"])
         rows.append([f"50000{index}", "ingredient", f"swap compound {index}"])
+    # tests/fixtures/cost_direction, tier moves that cost more, less or unknown.
+    for index in range(11, 14):
+        rows.append([f"5000{index}", "full", f"cost compound {index} 5 MG Oral Tablet"])
+        rows.append([f"5000{index}", "ingredient", f"cost compound {index}"])
     return rows
 
 

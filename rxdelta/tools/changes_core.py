@@ -16,7 +16,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 from rxdelta.ask.values import change_values
+from rxdelta.config import Config
 from rxdelta.db import queries
+from rxdelta.diff.cost_direction import CostDirection, directions
 from rxdelta.diff.engine import diff_snapshots
 from rxdelta.tools.common import (
     CoverageValues,
@@ -35,7 +37,10 @@ from rxdelta.types import ChangeType, PlanKey
 _CHANGE_ORDER = {c: i for i, c in enumerate(ChangeType)}
 # rxcui, formulary before, formulary after, change type, before value, after value,
 # and the full before and after coverage, so rows that differ anywhere stay apart.
-_RowKey = tuple[str, str, str, ChangeType, str | None, str | None, str, str]
+# and for a tier move its cost direction, since plans on one formulary pair can
+# price the two tiers differently.
+_RowKey = tuple[str, str, str, ChangeType, str | None, str | None, str, str, str]
+_TIER_MOVES = frozenset({ChangeType.TIER_UP, ChangeType.TIER_DOWN})
 
 
 class ChangeRow(BaseModel):
@@ -46,6 +51,11 @@ class ChangeRow(BaseModel):
     change_type: ChangeType
     before_value: str | None
     after_value: str | None
+    cost_direction: CostDirection | None = Field(
+        description="For a tier move, whether the member pays more, less or the same, read "
+        "from the plan's published cost sharing; unknown when it cannot be told. "
+        "None for other change types."
+    )
     before: CoverageValues | None
     after: CoverageValues | None
     ndcs: list[str]
@@ -108,26 +118,29 @@ def _memo_key(db_path: Path, month_from: str, month_to: str) -> tuple[str, int, 
 
 
 def all_rows(
-    conn: sqlite3.Connection, db_path: Path, month_from: str, month_to: str
+    conn: sqlite3.Connection, db_path: Path, config: Config, month_from: str, month_to: str
 ) -> list[ChangeRow]:
     """Every change row for the month pair, memoized per database file state."""
     key = _memo_key(db_path, month_from, month_to)
     with _memo_lock:
         hit = _memo.get(key)
         if hit is None:
-            hit = _build_rows(conn, month_from, month_to)
+            hit = _build_rows(conn, config, month_from, month_to)
             _memo[key] = hit
     return hit
 
 
-def _build_rows(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[ChangeRow]:
+def _build_rows(
+    conn: sqlite3.Connection, config: Config, month_from: str, month_to: str
+) -> list[ChangeRow]:
     result = diff_snapshots(conn, month_from, month_to)
+    costs = directions(conn, config, result)
     formularies_from = {p.key: p.formulary_id for p in queries.plans(conn, month_from)}
     formularies_to = {p.key: p.formulary_id for p in queries.plans(conn, month_to)}
     plans: dict[_RowKey, set[PlanKey]] = defaultdict(set)
     ndcs: dict[_RowKey, set[str]] = defaultdict(set)
     states: dict[_RowKey, tuple[CoverageValues | None, CoverageValues | None]] = {}
-    for change in result.changes:
+    for change, cost in zip(result.changes, costs, strict=True):
         before = CoverageValues.from_coverage(change.before) if change.before else None
         after = CoverageValues.from_coverage(change.after) if change.after else None
         # A package code swap carries the old NDC before and the new one after.
@@ -147,6 +160,7 @@ def _build_rows(conn: sqlite3.Connection, month_from: str, month_to: str) -> lis
                 after_value,
                 before.model_dump_json() if before else "",
                 after.model_dump_json() if after else "",
+                cost.value if cost is not None and change_type in _TIER_MOVES else "",
             )
             plans[key].add(change.plan)
             ndcs[key] |= found_in
@@ -162,6 +176,7 @@ def _build_rows(conn: sqlite3.Connection, month_from: str, month_to: str) -> lis
             change_type=key[3],
             before_value=key[4],
             after_value=key[5],
+            cost_direction=CostDirection(key[8]) if key[8] else None,
             before=states[key][0],
             after=states[key][1],
             ndcs=sorted(ndcs[key]),
@@ -173,7 +188,7 @@ def _build_rows(conn: sqlite3.Connection, month_from: str, month_to: str) -> lis
     return sorted(rows, key=sort_key)
 
 
-def sort_key(row: ChangeRow) -> tuple[str, str, str, int, str, str]:
+def sort_key(row: ChangeRow) -> tuple[str, str, str, int, str, str, str]:
     return (
         row.formulary_id,
         row.display_name.lower(),
@@ -181,6 +196,7 @@ def sort_key(row: ChangeRow) -> tuple[str, str, str, int, str, str]:
         _CHANGE_ORDER[row.change_type],
         row.before_value or "",
         row.after_value or "",
+        row.cost_direction.value if row.cost_direction else "",
     )
 
 
