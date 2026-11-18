@@ -117,6 +117,16 @@ class Facts:
             for formulary, rxcui in rows:
                 self.coverage.setdefault((month, str(formulary)), []).append(str(rxcui))
             self.formularies[month] = sorted({str(r[0]) for r in rows})
+        self.plan_words = {
+            month: [
+                (
+                    f"{p.key.contract_id}-{p.key.plan_id}",
+                    frozenset(normalize_name(f"{p.plan_name} {p.contract_name}").split()),
+                )
+                for p in queries.plans(conn, month)
+            ]
+            for month in self.months
+        }
         self.plans = {
             month: [
                 PlanRef(
@@ -210,6 +220,12 @@ class Facts:
             ):
                 found.append((token, members))
         return found
+
+    def names_one_plan(self, month: str, name: str) -> bool:
+        """Whether a plan name, matched the way find_plan matches names, picks
+        exactly one plan. Real plan names repeat across contracts."""
+        wanted = frozenset(normalize_name(name).split())
+        return sum(1 for _, words in self.plan_words[month] if wanted <= words) == 1
 
     def plans_on(self, month: str, formulary: str) -> list[PlanRef]:
         return [p for p in self.plans[month] if p.formulary_id == formulary]
@@ -454,7 +470,11 @@ class Generator:
             slots |= {"formulary": formulary, "other": other}
             return self.candidate("multi_step", t, slots, "changes_where_coverage", args)
         row = self.rng.choice(rows)
-        plans = self.f.plans_on(pair[1], row.formulary_to)
+        plans = [
+            p
+            for p in self.f.plans_on(pair[1], row.formulary_to)
+            if self.f.names_one_plan(pair[1], p.name)
+        ]
         if not plans:
             return None
         plan = self.rng.choice(plans)
