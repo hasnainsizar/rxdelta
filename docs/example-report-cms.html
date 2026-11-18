@@ -577,7 +577,7 @@ th.num { text-align: right; }
       </div>
       <div>
         <dt>Distinct changes</dt>
-        <dd>686<span class="unit">groups</span></dd>
+        <dd>695<span class="unit">groups</span></dd>
       </div>
       <div>
         <dt>Drugs affected</dt>
@@ -620,7 +620,7 @@ th.num { text-align: right; }
   <section>
     <div class="head">
       <h2>Changes ranked by estimated member impact</h2>
-      <span class="count">50 of 686</span>
+      <span class="count">50 of 695</span>
     </div>
     <p class="note">
       Cost figures are ranges, not predictions. The range spans preferred, non preferred and mail order pharmacies and every supply length the plan publishes, scaled to 30 days. Each row leads with the modal case, a fill at a preferred retail pharmacy on a
@@ -4297,11 +4297,14 @@ spans zero at modal case              </span>
     </div>
     <p class="note" style="margin: var(--s-4) 0 0">
       A group is one drug with one combination of changes and one tier movement, counted across
-      every plan it affects. Severity is a 0 to 100 sorting score combining the size of the range,
+      every plan it affects. A tier move is labelled by what it does to the member's cost, read from
+      the cost sharing the plan publishes for the two tiers, not by the tier number: a move to a
+      higher numbered tier can cost less, and where the plan publishes no comparable cost the row
+      says so. Severity is a 0 to 100 sorting score combining the size of the range,
       its direction, how many plans it reaches, and whether a utilization restriction was added.
       Bands: High at 75, Elevated at 50, Moderate at 25, Low at 0.
-      The score takes 103 distinct value(s) across
-      686 group(s) here; ties are broken by affected plan
+      The score takes 104 distinct value(s) across
+      695 group(s) here; ties are broken by affected plan
       count, then range width, then distance from zero.
     </p>
   </section>

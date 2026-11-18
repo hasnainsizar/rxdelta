@@ -143,6 +143,18 @@ dapagliflozin product whose brand NDCs were replaced by generic ones. The diff,
 the report, the question tools and the eval gold answers now share one rule for
 this, in `rxdelta/swaps.py`.
 
+**A higher tier number can cost less.** Tier numbers are labels CMS assigns, not
+prices. Comparing the cost sharing each plan publishes for the old tier against
+the new one, like for like, 200 of the 208 June to July tier increases cost the
+member less (the dapagliflozin products moving from tier 3 to tier 6, a $0 tier
+on most of those plans), 2 cost the same and 6 cannot be told from the published
+figures; none is confirmed to cost more. No tier decrease in any of the three
+month pairs costs more. Every tier move in `diff`, the report and the question
+tools now carries a `cost_direction` (higher, lower, same or unknown), the
+report labels and ranks tier moves by it, and `tier_up` and `tier_down` still say
+what CMS changed. "Unknown" means the plan publishes no comparable figure for one
+of the two tiers, typically coinsurance with no dollar bounds against a copay.
+
 **Two more shapes the fixtures never had.** The plan information file carries
 one row per plan **per county**, up to 387 rows for a single plan, so 95 percent
 of rows looked like duplicate keys. Identical repeats now collapse and are
@@ -164,7 +176,7 @@ Stated rather than smoothed over. None of these were adjusted away.
 - **104 groups share a severity of exactly 60.00.** A hard cluster on a round
   number suggests a term in the score is saturating or falling back to a default
   rather than varying. Not investigated. The formula was not touched to hide it.
-- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 71
+- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 70
   percent of groups (79 percent before package code swaps were paired). Real changes cluster into a few archetypes, mostly mass
   additions, mass removals and prior authorization added, so the score separates
   archetypes well and separates within them poorly.
@@ -256,15 +268,16 @@ Real CMS months, 1,302,746 rows per month (`make cms-bench`):
 
 | Step | Before optimization | After | With swap pairing |
 | --- | --- | --- | --- |
-| Load 2026-05 | 16.54s | 17.18s | 15.58s |
-| Load 2026-06 | 16.73s | 15.38s | 15.01s |
-| Diff and score | 32.31s | 21.20s | 6.48s |
+| Load 2026-05 | 16.54s | 17.18s | 15.32s |
+| Load 2026-06 | 16.73s | 15.38s | 14.90s |
+| Diff and score | 32.31s | 21.20s | 6.60s |
 | Render report | 0.70s | 0.64s | 0.10s |
-| **End to end** | **66.28s** | **54.39s** | **37.16s** |
+| **End to end** | **66.28s** | **54.39s** | **36.91s** |
 
 The first two columns diffed 1,030,491 drug and plan changes in 1,367 groups.
-Pairing package code swaps (below) leaves 222,989 changes in 686 groups, which
-is most of why the last column is faster.
+Pairing package code swaps (below) leaves 222,989 changes, which is most of why
+the last column is faster. They fall into 695 groups once groups are also split
+by what a tier move does to the member's cost.
 
 The diff got faster two ways: tier costs were being computed 2,060,982 times for
 about 38,000 distinct answers and are now memoized, and SQLite discards rows that

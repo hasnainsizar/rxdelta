@@ -571,7 +571,9 @@ metformin), whose brand NDCs were replaced by generic ones while their tiers
 moved: down on most formularies, up from tier 3 to 6 on 104 plans. For the May
 to June report the fix also changes the pricing counts quoted under
 [coinsurance](#coinsurance-is-unpriceable-on-the-real-files): 235 of 686 groups
-carry no price and 541 have no modal case.
+carry no price and 541 have no modal case. (Splitting groups by
+[cost direction](#tier-numbers-do-not-order-cost) later made that 244 of 695
+groups unpriced and 550 with no modal case.)
 
 **How it was found.** Not by the diff tests, which use fixtures with one NDC per
 drug that never changes. The question layer (part 6) rolls changes up to RXCUIs,
@@ -602,6 +604,65 @@ lookup of a formulary's RXCUIs used `SELECT DISTINCT`, and SQLite answered it
 from the `(snapshot_month, rxcui)` index by scanning the whole month, about a
 second per formulary. Without `DISTINCT` it uses the formulary index.
 
+### Tier numbers do not order cost
+
+**What was wrong.** The diff labels a move to a higher numbered tier `tier_up`,
+and the report scored and coloured it as the member paying more. A tier number
+is a label CMS assigns, not a price. On the real files tier 6 is a "select care"
+tier that most plans price at $0, so a move from tier 3 to tier 6 usually costs
+the member less, and the report ranked those moves as if they were the worst
+news of the month.
+
+**How many rows.** Each tier move, per drug and plan, compared the old tier's
+published cost sharing in the earlier month with the new tier's in the later
+month, like for like (initial coverage phase, same supply length, same pharmacy
+channel):
+
+| | costs more | costs less | same | unknown |
+|---|---|---|---|---|
+| May to June, tier down (380) | 0 | 275 | 9 | 96 |
+| June to July, tier up (208) | 0 | 200 | 2 | 6 |
+| June to July, tier down (6,557) | 0 | 4,819 | 390 | 1,348 |
+| May to July, tier up (208) | 0 | 200 | 2 | 6 |
+| May to July, tier down (6,136) | 0 | 4,531 | 395 | 1,210 |
+
+No tier decrease costs more in any pair, but 200 of the 208 tier increases cost
+less, and not one is confirmed to cost more. The tier number pointed the wrong
+way for 96 percent of the tier increases. The channels never disagreed: in no
+row did one channel or supply length say more while another said less.
+
+**How it was found.** By asking the question of the swap fix's output: the 208
+tier increases between June and July were all dapagliflozin moving from tier 3
+to tier 6, and looking up tier 6 on those plans showed $0 copays where tier 3
+charged $47 or 20 percent coinsurance.
+
+**The rule.** `rxdelta/diff/cost_direction.py` compares, for each supply length
+and channel published at both tiers, a copay with a copay in dollars and a
+coinsurance with a coinsurance by rate. A copay against a coinsurance is decided
+only without needing a drug price: a $0 copay never costs more than a positive
+share, 0 percent never more than a positive copay, and otherwise only when the
+coinsurance publishes dollar bounds the copay lies outside. A direction is given
+when every comparable leg agrees; when none is comparable, or they disagree, it
+is `unknown`. The first version looked only at the modal case, a preferred retail
+30 day fill, and left 5,374 of the June to July tier decreases unknown because
+most plans do not offer that channel at all; reading every channel published at
+both tiers settled most of them. Most of the remaining unknowns are a copay at
+one tier against coinsurance with no dollar bounds at the other.
+
+**What changed.** `tier_up` and `tier_down` are unchanged, because they say what
+CMS did. Every tier move now carries `cost_direction`: in the diff's JSON and
+CSV, in the terminal table and report labels ("Tier up (costs the member less)"),
+and in the question tools' rows, with `count_changes` able to group by it. The
+report's direction, and so its severity ranking, follows `cost_direction` for a
+tier move; an unknown or same direction counts for neither side. Plans on one
+change can price the two tiers differently, so report groups and tool rows are
+split by direction rather than labelled by a majority; that took the May to June
+report from 686 to 695 groups. Gold computes the direction again from the raw
+cost rows with its own code, and gold and the tools agree on every row of all
+three real month pairs (8,573, 19,154 and 27,032 rows). `tests/test_cost_direction.py`
+covers each comparison rule and a fixture with a tier increase that costs less,
+one that costs more and one that cannot be told.
+
 ## Part 5: incidents and open questions
 
 ### `make clean` deleted the real CMS download
@@ -625,11 +686,11 @@ appears in the README.
 - **104 groups share a severity of exactly 60.00.** A hard cluster on a round
   number suggests a term in the score is saturating or falling back to a default
   rather than varying. Not investigated.
-- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 71
+- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 70
   percent of groups (79 before package code swaps were paired). Real changes
   cluster into a few archetypes, so the score separates archetypes well and
   separates within them poorly. With swaps paired the May to June comparison has
-  103 distinct severity values across 686 groups, and the 104 group tie at 60.00
+  104 distinct severity values across 695 groups, and the 104 group tie at 60.00
   is unchanged.
 - **The layout change detection path has never been triggered by data.** May and
   June 2026 share one record layout version, so it fired only because old code

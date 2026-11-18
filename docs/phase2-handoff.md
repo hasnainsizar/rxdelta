@@ -102,6 +102,10 @@ Tune on `--split dev`. Run `--split test` only when reporting. Compare runs with
   `truncated`, take the number of drugs from `count_changes`, and either give
   that count or a partial list marked `truncated` with `total` set. Listing a
   partial page as if it were the whole answer scores wrong.
+- **Tier numbers are not prices.** A tier change row carries `cost_direction`
+  (higher, lower, same, unknown). An agent asked whether a drug got more
+  expensive should answer from that, or from `estimate_cost_change`, never from
+  `tier_up` alone: on the real data most tier increases cost the member less.
 - **`find_drug` returns at most 25 RXCUIs.** On real data many ingredients have
   more forms than that. The eval only asks class and ambiguous questions within
   the cap; an agent facing a bigger class has to narrow the query (a strength, a
