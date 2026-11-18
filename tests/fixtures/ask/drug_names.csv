@@ -172,3 +172,11 @@ rxcui,name_type,name
 100017,ingredient,fixture compound 17
 100018,full,fixture compound 18 10 MG Oral Tablet
 100018,ingredient,fixture compound 18
+500001,full,swap compound 1 5 MG Oral Tablet
+500001,ingredient,swap compound 1
+500002,full,swap compound 2 5 MG Oral Tablet
+500002,ingredient,swap compound 2
+500003,full,swap compound 3 5 MG Oral Tablet
+500003,ingredient,swap compound 3
+500004,full,swap compound 4 5 MG Oral Tablet
+500004,ingredient,swap compound 4

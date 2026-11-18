@@ -2,9 +2,12 @@
 
 Nothing here imports rxdelta.tools or rxdelta.diff. The change classification,
 the cost range and every lookup are written again in SQL, so a bug in a tool
-shows up as a disagreement instead of being copied into the eval set. The only
+shows up as a disagreement instead of being copied into the eval set. The
 shared pieces are the answer contract in rxdelta.ask (payload models and the
-canonical before and after strings) and the config.
+canonical before and after strings), the config, and rxdelta.swaps, the one rule
+for package code swaps that the diff, the report and the tools use too. That
+rule is tested directly in tests/test_swaps.py, because gold cannot catch a bug
+in it.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from rxdelta.ask.answer import (
 )
 from rxdelta.ask.values import CoverageState, change_values
 from rxdelta.config import Config
+from rxdelta.swaps import pair_swaps
 from rxdelta.types import ChangeType
 
 _PLAN_ID = re.compile(r"^([A-Z]\d{4})-(\d{1,3})(?:-(\d{1,3}))?$")
@@ -211,11 +215,17 @@ SELECT a.contract_id || '-' || a.plan_id || '-' || a.segment_id AS plan,
  WHERE a.snapshot_month = :m_from AND b.snapshot_month = :m_to
 """
 
-_SIDE = (
-    "{p}.rxcui, {p}.tier_level, {p}.prior_auth, {p}.step_therapy, {p}.quantity_limit, "
-    "{p}.quantity_limit_amount, {p}.quantity_limit_days"
+_FIELDS = (
+    ("rxcui", "rxcui"),
+    ("tier_level", "tier"),
+    ("prior_auth", "pa"),
+    ("step_therapy", "st"),
+    ("quantity_limit", "ql"),
+    ("quantity_limit_amount", "amt"),
+    ("quantity_limit_days", "days"),
 )
-_NULL_SIDE = ", ".join(["NULL"] * 7)
+_SIDE = ", ".join(f"{{p}}.{column} AS {{p}}_{alias}" for column, alias in _FIELDS)
+_NULL_SIDE = ", ".join(f"NULL AS x_{alias}" for _, alias in _FIELDS)
 
 _JOINED_SQL = f"""
 WITH pairs AS (SELECT DISTINCT f_from, f_to FROM ({_PAIRS_SQL}))
@@ -234,44 +244,49 @@ SELECT pairs.f_from, pairs.f_to, y.ndc_11, {_NULL_SIDE}, {_SIDE.format(p="y")}
           AND x.ndc_11 = y.ndc_11)
 """
 
-# One branch per change type over the joined rows. a_* is the earlier month.
-# Additions and removals are of the RXCUI. When a formulary swaps the NDC that
-# stands for an RXCUI, the old and new NDC rows are paired as one before and
-# after, so a swap is no change unless the coverage itself moved.
-_CLASSIFY_SQL = f"""
-WITH j(f_from, f_to, ndc, a_rxcui, a_tier, a_pa, a_st, a_ql, a_amt, a_days,
-       b_rxcui, b_tier, b_pa, b_st, b_ql, b_amt, b_days) AS ({_JOINED_SQL}),
-gone AS (SELECT * FROM j WHERE b_rxcui IS NULL),
-new AS (SELECT * FROM j WHERE a_rxcui IS NULL),
-swaps AS (
-  SELECT g.f_from, g.f_to, g.ndc, g.a_rxcui, g.a_tier, g.a_pa, g.a_st, g.a_ql, g.a_amt, g.a_days,
-         n.b_rxcui, n.b_tier, n.b_pa, n.b_st, n.b_ql, n.b_amt, n.b_days
-    FROM gone g JOIN new n
-      ON n.f_from = g.f_from AND n.f_to = g.f_to AND n.b_rxcui = g.a_rxcui),
-both_sides AS (
-  SELECT * FROM j WHERE a_rxcui IS NOT NULL AND b_rxcui IS NOT NULL
-  UNION ALL SELECT * FROM swaps)
-SELECT 'drug_added', * FROM new
- WHERE NOT EXISTS (SELECT 1 FROM formulary z WHERE z.snapshot_month = :m_from
-                   AND z.formulary_id = new.f_from AND z.rxcui = new.b_rxcui)
-UNION ALL SELECT 'drug_removed', * FROM gone
- WHERE NOT EXISTS (SELECT 1 FROM formulary z WHERE z.snapshot_month = :m_to
-                   AND z.formulary_id = gone.f_to AND z.rxcui = gone.a_rxcui)
-UNION ALL SELECT 'tier_up', * FROM both_sides WHERE b_tier > a_tier
-UNION ALL SELECT 'tier_down', * FROM both_sides WHERE b_tier < a_tier
-UNION ALL SELECT 'prior_auth_added', * FROM both_sides WHERE b_pa = 1 AND a_pa = 0
-UNION ALL SELECT 'prior_auth_removed', * FROM both_sides WHERE b_pa = 0 AND a_pa = 1
-UNION ALL SELECT 'step_therapy_added', * FROM both_sides WHERE b_st = 1 AND a_st = 0
-UNION ALL SELECT 'step_therapy_removed', * FROM both_sides WHERE b_st = 0 AND a_st = 1
-UNION ALL SELECT 'quantity_limit_added', * FROM both_sides WHERE b_ql = 1 AND a_ql = 0
-UNION ALL SELECT 'quantity_limit_removed', * FROM both_sides WHERE b_ql = 0 AND a_ql = 1
-UNION ALL SELECT 'quantity_limit_tightened', * FROM both_sides
- WHERE a_ql = 1 AND b_ql = 1 AND a_amt IS NOT NULL AND b_amt IS NOT NULL
-   AND a_days > 0 AND b_days > 0 AND b_amt * a_days < a_amt * b_days
-UNION ALL SELECT 'quantity_limit_loosened', * FROM both_sides
- WHERE a_ql = 1 AND b_ql = 1 AND a_amt IS NOT NULL AND b_amt IS NOT NULL
-   AND a_days > 0 AND b_days > 0 AND b_amt * a_days > a_amt * b_days
+# Rows that differ between the months, NDC by NDC; a_* is the earlier month.
+_DIFFERING_SQL = f"""
+SELECT * FROM ({_JOINED_SQL})
+ WHERE x_rxcui IS NULL OR y_rxcui IS NULL
+    OR x_tier <> y_tier OR x_pa <> y_pa OR x_st <> y_st OR x_ql <> y_ql
+    OR IFNULL(x_amt, -1) <> IFNULL(y_amt, -1) OR IFNULL(x_days, -1) <> IFNULL(y_days, -1)
 """
+
+# (formulary before, formulary after, rxcui, state before, state after)
+_NdcRow = tuple[str, str, str, CoverageState | None, CoverageState | None]
+
+_LISTED_SQL = "SELECT DISTINCT formulary_id, rxcui FROM formulary WHERE snapshot_month = ?"
+
+
+def _change_types(before: CoverageState, after: CoverageState) -> list[ChangeType]:
+    """What changed for one drug that is on the formulary in both months."""
+    found: list[ChangeType] = []
+    if after.tier != before.tier:
+        found.append(ChangeType.TIER_UP if after.tier > before.tier else ChangeType.TIER_DOWN)
+    for flag, added, removed in (
+        ("prior_auth", ChangeType.PRIOR_AUTH_ADDED, ChangeType.PRIOR_AUTH_REMOVED),
+        ("step_therapy", ChangeType.STEP_THERAPY_ADDED, ChangeType.STEP_THERAPY_REMOVED),
+        ("quantity_limit", ChangeType.QUANTITY_LIMIT_ADDED, ChangeType.QUANTITY_LIMIT_REMOVED),
+    ):
+        was, now = getattr(before, flag), getattr(after, flag)
+        if now and not was:
+            found.append(added)
+        elif was and not now:
+            found.append(removed)
+    limits = (
+        before.quantity_limit_amount,
+        before.quantity_limit_days,
+        after.quantity_limit_amount,
+        after.quantity_limit_days,
+    )
+    if before.quantity_limit and after.quantity_limit and all(limits):
+        old_amount, old_days, new_amount, new_days = (float(v or 0) for v in limits)
+        # Compare allowances per day without dividing: a/b < c/d iff a*d < c*b.
+        if new_amount * old_days < old_amount * new_days:
+            found.append(ChangeType.QUANTITY_LIMIT_TIGHTENED)
+        elif new_amount * old_days > old_amount * new_days:
+            found.append(ChangeType.QUANTITY_LIMIT_LOOSENED)
+    return found
 
 
 _memo: dict[tuple[str, int, int, str, str], list[GoldChange]] = {}
@@ -298,15 +313,45 @@ def _classify(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[
     plans_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
     for plan, f_from, f_to in conn.execute(_PAIRS_SQL, params).fetchall():
         plans_by_pair[(str(f_from), str(f_to))].add(str(plan))
+    listed = {
+        month: {(str(f), str(r)) for f, r in conn.execute(_LISTED_SQL, (month,)).fetchall()}
+        for month in (month_from, month_to)
+    }
+
+    both: list[_NdcRow] = []
+    removed: list[_NdcRow] = []
+    added: list[_NdcRow] = []
+    for row in conn.execute(_DIFFERING_SQL, params).fetchall():
+        f_from, f_to = str(row[0]), str(row[1])
+        before = _state(row, 4) if row[3] is not None else None
+        after = _state(row, 11) if row[10] is not None else None
+        rxcui = str(row[10] if row[10] is not None else row[3])
+        target = both if before and after else (removed if before else added)
+        target.append((f_from, f_to, rxcui, before, after))
+
+    swaps = pair_swaps(
+        removed,
+        added,
+        removed_key=lambda r: (r[0], r[1], r[2]),
+        added_key=lambda r: (r[0], r[1], r[2]),
+        listed_after=lambda k: (k[1], k[2]) in listed[month_to],
+        listed_before=lambda k: (k[0], k[2]) in listed[month_from],
+    )
+    found: list[tuple[str, str, str, ChangeType, CoverageState | None, CoverageState | None]] = []
+    for f_from, f_to, rxcui, before, after in both:
+        assert before is not None and after is not None
+        found += [(f_from, f_to, rxcui, t, before, after) for t in _change_types(before, after)]
+    for old, new in swaps.pairs:
+        assert old[3] is not None and new[4] is not None
+        found += [
+            (old[0], old[1], old[2], t, old[3], new[4]) for t in _change_types(old[3], new[4])
+        ]
+    found += [(r[0], r[1], r[2], ChangeType.DRUG_REMOVED, r[3], None) for r in swaps.removals]
+    found += [(r[0], r[1], r[2], ChangeType.DRUG_ADDED, None, r[4]) for r in swaps.additions]
 
     grouped: dict[tuple[Any, ...], set[str]] = defaultdict(set)
     tiers: dict[tuple[Any, ...], tuple[int | None, int | None]] = {}
-    for row in conn.execute(_CLASSIFY_SQL, params).fetchall():
-        change_type = ChangeType(str(row[0]))
-        f_from, f_to = str(row[1]), str(row[2])
-        before = _state(row, 5) if row[4] is not None else None
-        after = _state(row, 12) if row[11] is not None else None
-        rxcui = str(row[11] if row[11] is not None else row[4])
+    for f_from, f_to, rxcui, change_type, before, after in found:
         before_value, after_value = change_values(change_type, before, after)
         key = (rxcui, f_from, f_to, change_type, before_value, after_value)
         grouped[key] |= plans_by_pair[(f_from, f_to)]

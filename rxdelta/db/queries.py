@@ -255,6 +255,15 @@ def name_cache_size(conn: sqlite3.Connection) -> int:
     return int(row["n"]) if row else 0
 
 
+def formulary_rxcuis(conn: sqlite3.Connection, month: str, formulary_id: str) -> set[str]:
+    """Every RXCUI a formulary lists in one month, under any NDC."""
+    rows = conn.execute(
+        "SELECT DISTINCT rxcui FROM formulary WHERE snapshot_month = ? AND formulary_id = ?",
+        (month, formulary_id),
+    ).fetchall()
+    return {str(r["rxcui"]) for r in rows}
+
+
 def distinct_ndc_count(conn: sqlite3.Connection, month: str) -> int:
     row = conn.execute(
         "SELECT COUNT(DISTINCT ndc_11) AS n FROM formulary WHERE snapshot_month = ?", (month,)

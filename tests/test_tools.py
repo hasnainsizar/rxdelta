@@ -528,25 +528,6 @@ def test_estimate_cost_change_empty_and_errors(ctx: ToolContext) -> None:
 # Agreement with the existing diff command
 
 
-def swapped(db: Path, pair: tuple[str, str], rxcui: str, change_type: str, plan: str) -> bool:
-    """An NDC added or removed while its RXCUI stays on the plan's formulary."""
-    if change_type not in ("drug_added", "drug_removed"):
-        return False
-    other = pair[0] if change_type == "drug_added" else pair[1]
-    contract, plan_id, segment = plan.split("-")
-    conn = sqlite3.connect(db)
-    try:
-        row = conn.execute(
-            "SELECT 1 FROM plan_info p JOIN formulary f ON f.snapshot_month = p.snapshot_month "
-            "AND f.formulary_id = p.formulary_id WHERE p.snapshot_month = ? AND p.contract_id = ? "
-            "AND p.plan_id = ? AND p.segment_id = ? AND f.rxcui = ?",
-            (other, contract, plan_id, segment, rxcui),
-        ).fetchone()
-    finally:
-        conn.close()
-    return row is not None
-
-
 def test_a_replaced_package_code_is_not_a_change(ctx: ToolContext) -> None:
     """Formulary 00026124 swaps Eliquis NDC 02 for NDC 03 in February. The diff
     sees a removal and an addition; at the RXCUI grain nothing changed."""
@@ -581,22 +562,14 @@ def test_get_changes_agrees_with_the_diff_command(
         assert result.exit_code == 0, result.output
         groups = json.loads(out.read_text())["groups"]
         from_diff = {
-            (g["rxcui"], g["ndc_11"], t, p)
-            for g in groups
-            for t in g["change_types"]
-            for p in g["plans"]
-            if not swapped(copy, pair, g["rxcui"], t, p)
+            (g["rxcui"], t, p) for g in groups for t in g["change_types"] for p in g["plans"]
         }
         from_tool = {
-            (r["rxcui"], n, r["change_type"], p)
+            (r["rxcui"], r["change_type"], p)
             for r in all_changes(ctx, from_month=pair[0], to_month=pair[1])
-            for n in r["ndcs"]
             for p in r["plans"]
         }
-        # The tool also sees changes inside NDC swaps, which the NDC diff cannot.
-        assert from_diff <= from_tool, pair
-        for rxcui, _ndc, _change_type, plan in from_tool - from_diff:
-            assert swapped(copy, pair, rxcui, "drug_removed", plan), (pair, rxcui, plan)
+        assert from_tool == from_diff, pair
 
 
 # Schemas

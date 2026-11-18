@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from rxdelta.db import queries
+from rxdelta.swaps import pair_swaps
 from rxdelta.types import ChangeType, DiffError, DrugCoverage, PlanKey
 
 _PairChange = tuple[str, str, tuple[ChangeType, ...], "DrugCoverage | None", "DrugCoverage | None"]
@@ -187,18 +188,44 @@ def _diff_formulary_pair(
 
     The candidate query has already discarded rows that are byte for byte the
     same in both months. Deciding what a surviving difference means is still
-    done here, by classify.
+    done here, by classify. An NDC removed and another added for the same RXCUI
+    is a package code swap: the two are compared as one drug's before and after,
+    so a swap alone is no change and a tier move made during a swap still shows.
     """
     formulary_from, formulary_to = pair
     out: list[_PairChange] = []
+    removed: list[DrugCoverage] = []
+    added: list[DrugCoverage] = []
     for before, after in queries.candidate_changes(
         conn, month_from, month_to, formulary_from, formulary_to
     ):
-        change_types = classify(before, after)
-        if not change_types:
+        if after is None and before is not None:
+            removed.append(before)
             continue
-        source = after or before
-        assert source is not None
-        out.append((source.ndc_11, source.rxcui, change_types, before, after))
-    out.sort(key=lambda item: item[0])
+        if before is None and after is not None:
+            added.append(after)
+            continue
+        change_types = classify(before, after)
+        if change_types:
+            assert after is not None
+            out.append((after.ndc_11, after.rxcui, change_types, before, after))
+
+    if removed or added:
+        listed_from = queries.formulary_rxcuis(conn, month_from, formulary_from)
+        listed_to = queries.formulary_rxcuis(conn, month_to, formulary_to)
+        swaps = pair_swaps(
+            removed,
+            added,
+            removed_key=lambda c: c.rxcui,
+            added_key=lambda c: c.rxcui,
+            listed_after=lambda rxcui: rxcui in listed_to,
+            listed_before=lambda rxcui: rxcui in listed_from,
+        )
+        for old, new in swaps.pairs:
+            change_types = classify(old, new)
+            if change_types:
+                out.append((new.ndc_11, new.rxcui, change_types, old, new))
+        out.extend((c.ndc_11, c.rxcui, (ChangeType.DRUG_REMOVED,), c, None) for c in swaps.removals)
+        out.extend((c.ndc_11, c.rxcui, (ChangeType.DRUG_ADDED,), None, c) for c in swaps.additions)
+    out.sort(key=lambda item: (item[0], item[3].ndc_11 if item[3] else ""))
     return out

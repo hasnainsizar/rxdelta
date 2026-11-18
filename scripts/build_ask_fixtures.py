@@ -737,6 +737,10 @@ def name_rows() -> list[list[str]]:
     for index in range(1, 19):
         rows.append([f"1000{index:02d}", "full", f"fixture compound {index:02d} 10 MG Oral Tablet"])
         rows.append([f"1000{index:02d}", "ingredient", f"fixture compound {index:02d}"])
+    # tests/fixtures/swaps, the package code swap cases.
+    for index in range(1, 5):
+        rows.append([f"50000{index}", "full", f"swap compound {index} 5 MG Oral Tablet"])
+        rows.append([f"50000{index}", "ingredient", f"swap compound {index}"])
     return rows
 
 
