@@ -20,7 +20,10 @@ from rich.table import Table
 from rxdelta import __version__
 from rxdelta.agent import ask as ask_support
 from rxdelta.agent import trace as agent_trace
-from rxdelta.agent.client import ModelClient
+from rxdelta.agent.budget import Ledger
+from rxdelta.agent.budget import check as check_budget
+from rxdelta.agent.budget import estimate as estimate_spend
+from rxdelta.agent.client import ModelClient, ReplayClient
 from rxdelta.agent.loop import AgentRunner, AgentSettings, default_client
 from rxdelta.ask.answer import QuestionContext
 from rxdelta.config import CATEGORIES, Config, get_config
@@ -984,25 +987,123 @@ def eval_run(
         float | None,
         typer.Option("--max-missed-refusal-rate", help="Override [eval].max_missed_refusal_rate."),
     ] = None,
+    stratified: Annotated[
+        bool, typer.Option("--stratified", help="Spread --limit evenly over categories.")
+    ] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Agent model ID.")] = None,
+    prompt: Annotated[
+        str | None, typer.Option("--prompt", help="Agent system prompt version, e.g. v1.")
+    ] = None,
+    repeats: Annotated[int, typer.Option("--repeats", min=1, help="Runs per item.")] = 1,
+    no_schema_guard: Annotated[
+        bool, typer.Option("--no-schema-guard", help="Turn off the schema guard.")
+    ] = False,
+    no_grounding_guard: Annotated[
+        bool, typer.Option("--no-grounding-guard", help="Turn off the grounding guard.")
+    ] = False,
+    no_consistency_guard: Annotated[
+        bool, typer.Option("--no-consistency-guard", help="Turn off the consistency guard.")
+    ] = False,
+    resume: Annotated[
+        Path | None, typer.Option("--resume", help="Run folder to finish; same flags as before.")
+    ] = None,
+    record: Annotated[
+        Path | None, typer.Option("--record", help="Record model responses to this cassette.")
+    ] = None,
+    replay: Annotated[
+        Path | None, typer.Option("--replay", help="Answer only from this cassette, no key.")
+    ] = None,
     config_path: ConfigOption = None,
 ) -> None:
     """Run one runner over the eval set and write results, a summary and a report."""
     if split not in ("dev", "test", "all"):
         raise RxdeltaError(f"--split must be dev, test or all, got {split!r}")
+    config = get_config(config_path)
+    guards_off = tuple(
+        name
+        for name, off in (
+            ("schema", no_schema_guard),
+            ("grounding", no_grounding_guard),
+            ("consistency", no_consistency_guard),
+        )
+        if off
+    )
+    agent_flags = model or prompt or guards_off or record or replay
+    if runner_name != "agent" and agent_flags:
+        raise RxdeltaError("--model, --prompt, guard, --record and --replay need --runner agent.")
+    if record and replay:
+        raise RxdeltaError("Use --record or --replay, not both.")
+    factory = None
+    options = eval_harness.RunOptions(repeats=repeats, resume=resume)
+    if runner_name == "agent":
+        settings = AgentSettings.from_config(
+            config, model=model, prompt_version=prompt, guards_off=guards_off
+        )
+        client: ModelClient
+        if replay is not None:
+            client = ReplayClient(replay, "replay")
+        elif record is not None:
+            client = ReplayClient(record, "record", make_agent_client(config))
+        else:
+            client = make_agent_client(config)
+        ledger = None if replay else Ledger(config.resolve(config.agent.ledger_path))
+        cap = None
+        if ledger is not None:
+            answers = eval_harness.planned_answers(
+                set_path, split, category, limit, stratified, repeats, resume
+            )
+            estimated = estimate_spend(config.agent, ledger, settings.model, answers)
+            console.print(estimated.describe(), highlight=False)
+            check_budget(estimated)
+            cap = config.agent.budget_usd - estimated.spent
+
+        def factory(items: list[Any], ctx: ToolContext) -> AgentRunner:
+            return AgentRunner(items, ctx, client=client, settings=settings)
+
+        options = eval_harness.RunOptions(
+            repeats=repeats,
+            resume=resume,
+            settings=settings.describe(),
+            ledger=ledger,
+            budget_cap=cap,
+            model=settings.model,
+        )
     outcome = eval_harness.run(
         set_path=set_path,
         runner_name=runner_name,
         split=split,
         db_path=db,
-        config=get_config(config_path),
+        config=config,
         out_root=out_dir,
         category=category,
         limit=limit,
         workers=workers,
         min_accuracy=min_accuracy,
         max_missed_refusal_rate=max_missed_refusal_rate,
+        runner_factory=factory,
+        stratified=stratified,
+        options=options,
     )
     summary = outcome.summary
+    if record is not None:
+        scores_file = record.with_suffix(".scores.json")
+        scores_file.write_text(
+            json.dumps(
+                {
+                    "settings": summary["settings"],
+                    "eval_set": str(set_path),
+                    "split": split,
+                    "limit": limit,
+                    "stratified": stratified,
+                    "correct": eval_harness.outcomes(outcome.directory),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"Recorded {record} and {scores_file}", highlight=False)
     overall = summary["overall"]
     table = Table(title=f"{runner_name} on {split}", title_justify="left")
     table.add_column("Category")
@@ -1018,6 +1119,22 @@ def eval_run(
         f"{summary['grounding']['items_with_ungrounded']}.",
         highlight=False,
     )
+    agent = summary.get("agent")
+    if agent:
+        reps = summary["repeats"]
+        console.print(
+            f"Repeats {reps['repeats']}: mean {_pct(reps['mean'])}, min {_pct(reps['min'])}, "
+            f"max {_pct(reps['max'])}, stdev {100 * reps['stdev']:.1f} points. First draft "
+            f"ungrounded {_pct(agent['first_draft_ungrounded_rate'])}, final "
+            f"{_pct(agent['final_ungrounded_rate'])}. Cost ${summary['run_cost_usd']:.4f} "
+            f"(${agent['cost_per_question']:.4f} per answer), cache hit share "
+            f"{_pct(agent['cache_hit_share'])}.",
+            highlight=False,
+        )
+    if summary.get("stopped_early"):
+        err_console.print(f"[yellow]Stopped early, {summary['stopped_early']}.[/yellow]")
+    if "ledger_total_usd" in summary:
+        console.print(f"Total spend in the ledger ${summary['ledger_total_usd']:.4f}.")
     console.print(f"Wrote {outcome.directory}", highlight=False)
     if not outcome.passed:
         err_console.print(
@@ -1034,6 +1151,16 @@ def eval_compare(
 ) -> None:
     """Per category accuracy change and the items that flipped between two runs."""
     result = eval_harness.compare(run_a, run_b)
+    if result.settings_differ:
+        settings = Table(title="Settings that differ", title_justify="left")
+        settings.add_column("Setting")
+        settings.add_column("A")
+        settings.add_column("B")
+        for key, (a, b) in result.settings_differ.items():
+            settings.add_row(key, json.dumps(a), json.dumps(b))
+        console.print(settings)
+    else:
+        console.print("Both runs used the same settings.", highlight=False)
     table = Table(title="Accuracy by category", title_justify="left")
     table.add_column("Category")
     table.add_column("A", justify="right")

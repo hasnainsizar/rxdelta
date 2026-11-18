@@ -20,6 +20,43 @@ def _pct(value: float | None) -> str:
     return "n/a" if value is None else f"{100 * value:.1f}%"
 
 
+def _agent_lines(summary: dict[str, Any]) -> list[str]:
+    agent = summary.get("agent")
+    if not agent:
+        return []
+    settings = agent["settings"]
+    reps = summary["repeats"]
+    guards_on = ", ".join(g for g, on in settings["guards"].items() if on) or "none"
+    lines = [
+        f"Model `{settings['model']}`, prompt `{settings['prompt_version']}`, guards on: "
+        f"{guards_on}, {reps['repeats']} repeat(s).",
+        "",
+        "| agent metric | value |",
+        "|---|---|",
+        f"| accuracy by repeat | {', '.join(_pct(a) for a in reps['accuracy_by_repeat'])} |",
+        f"| mean, min, max, stdev | {_pct(reps['mean'])}, {_pct(reps['min'])}, "
+        f"{_pct(reps['max'])}, {100 * reps['stdev']:.1f} points |",
+        f"| items right on every, some, no repeat | {reps['items_right_every_repeat']}, "
+        f"{reps['items_right_some_repeats']}, {reps['items_right_no_repeat']} |",
+        f"| first draft ungrounded | {_pct(agent['first_draft_ungrounded_rate'])} |",
+        f"| final ungrounded | {_pct(agent['final_ungrounded_rate'])} |",
+        f"| turns per question, mean | {agent['turns']['mean']:.2f} |",
+        f"| cache hit share | {_pct(agent['cache_hit_share'])} |",
+        f"| cost per question | ${agent['cost_per_question']:.4f} |",
+        f"| run cost | ${summary['run_cost_usd']:.4f} |",
+        f"| latency p50, p95 | {summary['cost_speed']['latency_ms']['p50']:.0f} ms, "
+        f"{summary['cost_speed']['latency_ms']['p95']:.0f} ms |",
+    ]
+    for guard, row in agent["guards"].items():
+        lines.append(
+            f"| guard {guard}: fired, retried, fixed, accepted failing | {row['fired']}, "
+            f"{row['retried']}, {row['fixed']}, {row['accepted_failing']} |"
+        )
+    if summary.get("stopped_early"):
+        lines.append(f"| stopped early | {summary['stopped_early']} |")
+    return [*lines, ""]
+
+
 def summary_markdown(summary: dict[str, Any]) -> str:
     overall = summary["overall"]
     tools = summary["tools"]
@@ -28,6 +65,7 @@ def summary_markdown(summary: dict[str, Any]) -> str:
         f"Runner `{summary['runner']}` on the `{summary['split']}` split, "
         f"{overall['items']} items.",
         "",
+        *_agent_lines(summary),
         "| metric | value |",
         "|---|---|",
         f"| accuracy | {_pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}) |",

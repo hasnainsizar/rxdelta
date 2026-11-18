@@ -453,7 +453,7 @@ def test_results_are_written_in_item_order_whatever_the_worker_count(
 def test_run_outputs(eval_set: Path, ask_db: Path, config: Config, tmp_path: Path) -> None:
     result = run(eval_set, ask_db, config, tmp_path, split="dev", category="count", limit=5)
     files = {p.name for p in result.directory.iterdir()}
-    assert files == {"results.jsonl", "summary.json", "summary.md", "report.html"}
+    assert files == {"results.jsonl", "summary.json", "summary.md", "report.html", "run.json"}
     assert result.directory.parent == tmp_path / "runs"
     assert result.directory.name.endswith("_oracle_dev")
     summary = json.loads((result.directory / "summary.json").read_text())

@@ -101,6 +101,35 @@ tbody td { padding: var(--s-3) var(--s-3) var(--s-3) 0; border-bottom: 1px solid
     </p>
   </section>
 
+  {% if s.agent is defined %}
+  {% set a = s.agent %}
+  <section>
+    <div class="head"><h2>Agent</h2></div>
+    <dl class="scope">
+      <div><dt>Model</dt><dd>{{ a.settings.model }}</dd></div>
+      <div><dt>Prompt</dt><dd>{{ a.settings.prompt_version }}</dd></div>
+      <div><dt>Guards on</dt><dd>{% for g, on in a.settings.guards.items() if on %}{{ g }}{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}</dd></div>
+      <div><dt>Repeats</dt><dd>{{ s.repeats.repeats }}</dd></div>
+      <div><dt>Accuracy spread</dt><dd>{{ pct(s.repeats.min) }} to {{ pct(s.repeats.max) }}</dd></div>
+      <div><dt>Right every repeat</dt><dd>{{ s.repeats.items_right_every_repeat }} items</dd></div>
+      <div><dt>First draft ungrounded</dt><dd>{{ pct(a.first_draft_ungrounded_rate) }}</dd></div>
+      <div><dt>Final ungrounded</dt><dd>{{ pct(a.final_ungrounded_rate) }}</dd></div>
+      <div><dt>Turns per question</dt><dd>{{ "%.2f"|format(a.turns.mean) }}</dd></div>
+      <div><dt>Cache hit share</dt><dd>{{ pct(a.cache_hit_share) }}</dd></div>
+      <div><dt>Cost per question</dt><dd>${{ "%.4f"|format(a.cost_per_question) }}</dd></div>
+      <div><dt>p50 latency</dt><dd>{{ "%.0f"|format(s.cost_speed.latency_ms.p50) }} ms</dd></div>
+    </dl>
+    <table>
+      <thead><tr><th scope="col">Guard</th><th scope="col" class="num">Fired</th><th scope="col" class="num">Retried</th><th scope="col" class="num">Fixed by the retry</th><th scope="col" class="num">Accepted failing</th></tr></thead>
+      <tbody>
+      {% for g, row in a.guards.items() %}
+        <tr><td>{{ g }}</td><td class="num">{{ row.fired }}</td><td class="num">{{ row.retried }}</td><td class="num">{{ row.fixed }}</td><td class="num">{{ row.accepted_failing }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   <section>
     <div class="head"><h2>By category</h2></div>
     <table>
