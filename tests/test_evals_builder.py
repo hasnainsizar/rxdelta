@@ -462,3 +462,32 @@ def test_evalset_cli(eval_db: Path, tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert len(read_items(out)) == 60
     assert manifest_path(out).is_file()
+
+
+def test_release_ids_are_recorded_only_when_the_files_match_the_load(
+    tmp_path: Path, config: Config
+) -> None:
+    import shutil
+
+    from rxdelta.db import connect
+    from rxdelta.ingest.loader import load_month
+    from tests.conftest import ASK
+
+    data = tmp_path / "data"
+    for month, release in (("2026-01", "2026_20260122"), ("2026-02", "2026_20260219")):
+        shutil.copytree(ASK / month, data / month / release / "tables")
+    db = tmp_path / "r.db"
+    conn = connect(db)
+    for month in ("2026-01", "2026-02"):
+        load_month(conn, config, month, data)
+    conn.close()
+
+    ro = open_ro(db)
+    assert builder.loaded_releases(ro, data, ["2026-01", "2026-02"]) == {
+        "2026-01": "2026_20260122",
+        "2026-02": "2026_20260219",
+    }
+    edited = data / "2026-02" / "2026_20260219" / "tables" / "plan information.txt"
+    edited.write_text(edited.read_text() + "\n", encoding="utf-8")
+    with pytest.raises(builder.BuildError, match="hash the load recorded"):
+        builder.loaded_releases(ro, data, ["2026-02"])

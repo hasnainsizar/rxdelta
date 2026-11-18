@@ -24,6 +24,7 @@ from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
 from rxdelta.evals import builder as evalset_builder
 from rxdelta.evals import harness as eval_harness
+from rxdelta.ingest import download as cms_download
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
 from rxdelta.names import fetch as names_fetch_module
@@ -879,6 +880,14 @@ def evalset_build(
         Path | None,
         typer.Option("--handwritten", help="Hand-written items to merge in."),
     ] = None,
+    data_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--data-dir",
+            help="Where the loaded CMS files are. Records each month's release ID in the "
+            "manifest after checking the files' hashes against the load.",
+        ),
+    ] = None,
     config_path: ConfigOption = None,
 ) -> None:
     """Build a deterministic eval set with gold answers computed from the database."""
@@ -893,6 +902,7 @@ def evalset_build(
         seed=seed,
         out=out,
         handwritten_path=hand,
+        data_dir=data_dir,
     )
     table = Table(title=f"Eval set {out}", title_justify="left")
     table.add_column("Category")
@@ -1016,6 +1026,37 @@ def eval_compare(
     console.print(table)
     console.print(f"Right to wrong: {', '.join(result.right_to_wrong) or 'none'}", highlight=False)
     console.print(f"Wrong to right: {', '.join(result.wrong_to_right) or 'none'}", highlight=False)
+
+
+@app.command("fetch-cms")
+@handle_errors
+def fetch_cms(
+    release: Annotated[
+        str, typer.Option("--release", help="Release ID, the archive name: 2026_20260513.")
+    ],
+    month: Annotated[
+        str | None,
+        typer.Option("--month", help="Snapshot month to file it under. Default: from the ID."),
+    ] = None,
+    directory: Annotated[
+        Path, typer.Option("--dir", help="Root directory holding one folder per month.")
+    ] = Path("data"),
+    config_path: ConfigOption = None,
+) -> None:
+    """Download one CMS monthly release, only the three tables rxdelta reads.
+
+    Uses the network. Reads the release archive in place over HTTP range
+    requests, so about 10MB is transferred instead of the 2.3GB archive.
+    """
+    config = get_config(config_path)
+    console.print(f"Looking up {release} in {config.download.catalog_url}")
+    fetched = cms_download.fetch_release(config, release, directory, month=month)
+    console.print(f"Read the tables from {fetched.url}", highlight=False)
+    for name in sorted(fetched.files):
+        console.print(f"  {fetched.directory / name}", highlight=False)
+    console.print(
+        f"Load it with: rxdelta load --month {fetched.month} --dir {directory}", highlight=False
+    )
 
 
 @app.command()

@@ -47,6 +47,7 @@ from rxdelta.evals.templates import (
     Template,
     month_phrases,
 )
+from rxdelta.ingest.download import RELEASE_PATTERN
 from rxdelta.names.match import DrugMatcher
 from rxdelta.names.normalize import normalize_name
 from rxdelta.types import ChangeType, RxdeltaError
@@ -972,6 +973,41 @@ def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
     }
 
 
+def loaded_releases(conn: sqlite3.Connection, data_dir: Path, months: list[str]) -> dict[str, str]:
+    """The CMS release behind each loaded month, proven by file hashes.
+
+    Every file the load recorded in ingest_log has to be found under
+    data_dir/<month>/ with the same SHA-256, inside a folder named for the
+    release (2026_20260513). Anything else means the files on disk are not the
+    ones in the database, and the build refuses to claim a release.
+    """
+    out: dict[str, str] = {}
+    for month in months:
+        logged = conn.execute(
+            "SELECT file_name, sha256 FROM ingest_log WHERE snapshot_month = ? ORDER BY 1",
+            (month,),
+        ).fetchall()
+        found: set[str] = set()
+        for name, digest in logged:
+            matches = [
+                p for p in (data_dir / month).rglob(str(name)) if sha256_file(p) == str(digest)
+            ]
+            if not matches:
+                raise BuildError(
+                    f"{name} (month {month}) is not under {data_dir / month} with the hash the "
+                    "load recorded, so the release it came from cannot be confirmed."
+                )
+            parts = matches[0].relative_to(data_dir / month).parts
+            found |= {part for part in parts[:-1] if RELEASE_PATTERN.match(part)}
+        if len(found) != 1:
+            raise BuildError(
+                f"The files for {month} are not inside one release folder such as "
+                f"2026_20260513 under {data_dir / month}."
+            )
+        out[month] = found.pop()
+    return out
+
+
 def write_set(
     result: BuildResult,
     out: Path,
@@ -981,6 +1017,7 @@ def write_set(
     seed: int,
     n: int,
     month_range: tuple[str, str],
+    releases: dict[str, str],
 ) -> Path:
     write_items(out, result.items)
     counts: dict[str, dict[str, int]] = {}
@@ -999,6 +1036,7 @@ def write_set(
         "items": len(result.items),
         "months": result.months,
         "month_range": list(month_range),
+        "releases": releases,
         "counts": {c: counts.get(c, {"dev": 0, "test": 0, "total": 0}) for c in CATEGORIES},
         "splits": {s: sum(1 for i in result.items if i.split == s) for s in ("dev", "test")},
         "shortfalls": result.shortfalls,
@@ -1028,6 +1066,7 @@ def build_file(
     seed: int,
     out: Path,
     handwritten_path: Path | None,
+    data_dir: Path | None = None,
 ) -> tuple[BuildResult, Path]:
     conn = open_db(db_path)
     try:
@@ -1049,6 +1088,7 @@ def build_file(
             seed=seed,
             n=n,
             month_range=(month_from, month_to),
+            releases=loaded_releases(conn, data_dir, result.months) if data_dir else {},
         )
     finally:
         conn.close()

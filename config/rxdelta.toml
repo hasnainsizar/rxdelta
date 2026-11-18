@@ -29,6 +29,20 @@ encoding = "cp1252"
 # patterns, which would be more fragile.
 exclude_dir_patterns = ["sample files*", "__MACOSX"]
 
+# Where `rxdelta fetch-cms` finds a release. The monthly files moved from cms.gov
+# to data.cms.gov; its catalog lists every release's archive URL.
+[source.download]
+# The data.cms.gov catalog, a JSON list of every dataset and its files.
+catalog_url = "https://data.cms.gov/data.json"
+# Dataset titles start with this, then the release date.
+dataset_title = "Monthly Prescription Drug Plan Formulary and Pharmacy Network Information"
+# Seconds before one request is abandoned and retried.
+request_timeout_seconds = 120.0
+# Retries after a network error or a 5xx, with doubling backoff.
+max_retries = 4
+# Bytes per range request when reading the remote archive.
+read_block_bytes = 8388608
+
 [source.files.formulary]
 patterns = ["basic drugs formulary file*", "formulary*"]
 

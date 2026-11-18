@@ -264,6 +264,14 @@ class EvalsetConfig(_Section):
         return self
 
 
+class DownloadConfig(_Section):
+    catalog_url: str
+    dataset_title: str
+    request_timeout_seconds: float = Field(gt=0)
+    max_retries: int = Field(ge=0)
+    read_block_bytes: int = Field(ge=4096)
+
+
 class EvalConfig(_Section):
     cost_tolerance: float = Field(ge=0)
     min_accuracy: float = Field(ge=0, le=1)
@@ -287,6 +295,7 @@ class Config:
     tools: ToolsConfig
     evalset: EvalsetConfig
     eval: EvalConfig
+    download: DownloadConfig
 
     @property
     def sha256(self) -> str:
@@ -623,6 +632,7 @@ def load_config(path: Path | None = None) -> Config:
         tools=_parse_model(data, ToolsConfig, "tools"),
         evalset=_parse_model(data, EvalsetConfig, "evalset"),
         eval=_parse_model(data, EvalConfig, "eval"),
+        download=_parse_model(data, DownloadConfig, "source", "download"),
     )
 
 
