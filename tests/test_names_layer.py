@@ -110,8 +110,11 @@ _CONCEPTS: dict[str, dict[str, object]] = {
         "full": "apixaban 5 MG Oral Tablet [Eliquis]",
         "groups": [
             {"tty": "IN", "conceptProperties": [{"name": "apixaban"}]},
-            {"tty": "BN", "conceptProperties": [{"name": "Eliquis"}]},
         ],
+    },
+    "8800181": {
+        "full": "metformin hydrochloride 500 MG Oral Tablet",
+        "groups": [{"tty": "IN", "conceptProperties": [{"name": "metformin"}]}],
     },
     "8800271": {
         "full": "lisinopril 10 MG Oral Tablet",
@@ -140,7 +143,7 @@ def _transport(
             return httpx.Response(
                 200, json={"properties": {"rxcui": rxcui, "name": concept["full"]}}
             )
-        assert request.url.params["tty"] == "IN MIN BN"
+        assert request.url.params["tty"] == "IN MIN"
         groups = concept["groups"] if concept else []
         return httpx.Response(200, json={"relatedGroup": {"conceptGroup": groups}})
 
@@ -178,6 +181,15 @@ def test_fetch_stores_full_ingredient_and_brand_names(tmp_path: Path, config: Co
         ("ingredient", "apixaban", "rxnav"),
     ]
     assert all("rxnav.nlm.nih.gov/REST/rxcui/" in c for c in calls)
+
+
+def test_a_generic_drug_gets_no_brand_name(tmp_path: Path, config: Config) -> None:
+    """On real data RxNav related generic carvedilol to Coreg. Brands come only
+    from a branded concept's own name."""
+    conn = _db_with_rxcuis(tmp_path, ["8800181", "8800141"])
+    fetch.fetch(conn, _client(config, _transport([])))
+    brands = dict(conn.execute("SELECT rxcui, name FROM drug_names WHERE name_type = 'brand'"))
+    assert brands == {"8800141": "Eliquis"}
 
 
 def test_fetch_logs_unknown_rxcuis_instead_of_dropping_them(tmp_path: Path, config: Config) -> None:

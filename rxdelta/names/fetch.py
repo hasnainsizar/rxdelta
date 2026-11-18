@@ -5,8 +5,13 @@ Endpoints, checked against the RxNav documentation:
 - GET {api_base}/rxcui/{rxcui}/properties.json returns
   {"properties": {"rxcui", "name", "tty", ...}}. An RXCUI outside the active
   data set returns no "properties" element.
-- GET {api_base}/rxcui/{rxcui}/related.json?tty=IN+MIN+BN returns
+- GET {api_base}/rxcui/{rxcui}/related.json?tty=IN+MIN returns
   {"relatedGroup": {"conceptGroup": [{"tty", "conceptProperties": [{"name", ...}]}]}}.
+
+Brands are not taken from the related concepts. For a generic drug RxNav
+relates every brand of the same ingredient (generic carvedilol relates to
+Coreg), which would make "Coreg" find the generic. RxNorm names a branded
+concept with its brand in trailing brackets, so that is the brand used.
 
 NLM asks for no more than 20 requests per second per IP. The rate here comes
 from [names].requests_per_second.
@@ -24,6 +29,7 @@ from typing import Any
 import httpx
 
 from rxdelta.config import NamesConfig
+from rxdelta.names.normalize import bracket_brand
 from rxdelta.names.rxnav import RateLimiter
 from rxdelta.names.store import (
     NameRow,
@@ -38,7 +44,6 @@ SOURCE = "rxnav"
 _USER_AGENT = "rxdelta/0.1 (+https://rxnav.nlm.nih.gov)"
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 _INGREDIENT_TTYS = ("IN", "MIN")
-_BRAND_TTYS = ("BN",)
 
 
 class FetchError(Exception):
@@ -118,26 +123,16 @@ class RxNavClient:
         full = str(properties.get("name") or "").strip()
         if not full:
             return None
-        related = self._get(
-            f"/rxcui/{rxcui}/related.json",
-            {"tty": " ".join(_INGREDIENT_TTYS + _BRAND_TTYS)},
-        )
+        related = self._get(f"/rxcui/{rxcui}/related.json", {"tty": " ".join(_INGREDIENT_TTYS)})
         groups = ((related or {}).get("relatedGroup") or {}).get("conceptGroup") or []
-        ingredients: list[str] = []
-        brands: list[str] = []
-        for group in groups:
-            tty = str(group.get("tty") or "")
-            for concept in group.get("conceptProperties") or []:
-                name = str(concept.get("name") or "").strip()
-                if not name:
-                    continue
-                if tty in _INGREDIENT_TTYS:
-                    ingredients.append(name)
-                elif tty in _BRAND_TTYS:
-                    brands.append(name)
-        return ConceptNames(
-            rxcui, full, tuple(sorted(set(ingredients))), tuple(sorted(set(brands)))
-        )
+        ingredients = {
+            str(concept.get("name") or "").strip()
+            for group in groups
+            if str(group.get("tty") or "") in _INGREDIENT_TTYS
+            for concept in group.get("conceptProperties") or []
+        } - {""}
+        brand = bracket_brand(full)
+        return ConceptNames(rxcui, full, tuple(sorted(ingredients)), (brand,) if brand else ())
 
 
 def concept_rows(names: ConceptNames, fetched_at: str) -> list[NameRow]:
