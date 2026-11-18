@@ -11,6 +11,8 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from rxdelta.names.store import rows_from_full_name, upsert
+
 FIELDNAMES = ("rxcui", "name", "source", "fetched_at")
 
 
@@ -70,17 +72,22 @@ def _sort_key(rxcui: str) -> tuple[int, int | str]:
 
 
 def merge_into_db(conn: sqlite3.Connection, names: dict[str, DrugName]) -> int:
-    """Upsert names into the reference table. Idempotent by RXCUI."""
+    """Upsert names into the reference table. Idempotent by RXCUI.
+
+    Each cached name lands as the RXCUI's full name, plus a brand row when the
+    name carries one in brackets. Returns the number of RXCUIs named.
+    """
     resolved = [n for n in names.values() if n.name]
     if not resolved:
         return 0
-    with conn:
-        conn.executemany(
-            "INSERT INTO drug_names (rxcui, name, source, fetched_at) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(rxcui) DO UPDATE SET "
-            "name = excluded.name, source = excluded.source, fetched_at = excluded.fetched_at",
-            [(n.rxcui, n.name, n.source, n.fetched_at) for n in resolved],
-        )
+    upsert(
+        conn,
+        [
+            row
+            for n in resolved
+            for row in rows_from_full_name(n.rxcui, n.name, n.source, n.fetched_at)
+        ],
+    )
     return len(resolved)
 
 

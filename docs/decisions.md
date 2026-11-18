@@ -60,3 +60,69 @@ rather than `pa_added`).
 
 **Plan table exists.** `plan_info` has contract ID, plan ID, segment ID, plan name
 and formulary ID, so `find_plan` searches plans, not only formulary IDs.
+
+## Drug names
+
+**`drug_names` is migrated in place, not replaced by a second table.** The old
+table had one row per RXCUI. `rxdelta/db/migrate.py` runs before the schema on
+every connect, detects the old shape by the missing `name_type` column, and
+rebuilds the table in one transaction: each old name becomes a `full` row, and
+a `brand` row is added when the name ends in an RxNorm style `[Brand]`. Empty
+names, which the old cache used to mark "RxNav does not know this", are not
+carried over. The report reads only `full` rows, so its output is unchanged
+(checked by diffing `diff`, `summary` and `report` output against `main` on the
+sample data). Would change: a need to keep the old table for some other reader.
+
+**The primary key is `(rxcui, name_type, name_norm)`, and an RXCUI keeps one
+full name.** Several ingredient and brand rows per RXCUI are the point, but two
+full names for one concept would make the display name ambiguous, so writing a
+new full name deletes the old one.
+
+**`source` is not restricted to `rxnav`, `rrf`, `fixture`.** The committed cache
+`data/reference/drug_names.csv` already uses `synthetic`, and every command loads
+it, so a check constraint would break existing databases. The three new loaders
+write exactly `rxnav`, `rrf` and `fixture`.
+
+**`names refresh` is left exactly as it was; `names fetch` is new.** `refresh`
+maintains the committed CSV cache through the old urllib client and is part of
+the existing surface. `fetch` writes full, ingredient and brand names straight
+to the database through `httpx`, which the prompt allows and which makes the
+transport easy to mock. The two share the token bucket rate limiter and the
+`[names]` rate, retry and timeout settings. Would change: retiring the CSV
+cache, at which point `refresh` can be removed.
+
+**RxNav endpoints.** Checked against the RxNav API documentation on 2026-11-17:
+`/REST/rxcui/{rxcui}/properties.json` gives the concept name and returns no
+`properties` element for an RXCUI outside the active set (treated as not found,
+as is a 404); `/REST/rxcui/{rxcui}/related.json?tty=IN+MIN+BN` gives ingredients
+(`IN`, and `MIN` for multi-ingredient names) and brands (`BN`) under
+`relatedGroup.conceptGroup[].conceptProperties[].name`. The terms of service
+allow 20 requests per second per IP; the default here stays at 8.
+
+**`names fetch` skips RXCUIs already logged as missing.** "Resumable, skips
+RXCUIs already stored" could mean names only. Skipping logged misses too means a
+rerun after a full pass makes no requests at all. Would change: add a
+`--retry-missing` flag if RxNav coverage improves.
+
+**Hard failures are not logged to `drug_names_missing`.** A network failure says
+nothing about whether the RXCUI exists, so it is counted and retried on the next
+run rather than recorded as "not found".
+
+**The RRF loader stores full names and bracketed brands, not ingredients.**
+`RXNCONSO.RRF` carries names but the drug to ingredient links live in
+`RXNREL.RRF`, which the prompt does not mention. Ingredient queries still match
+through the token stage, because the ingredient is part of every clinical drug
+name. Would change: accept an `--rel` file and walk the ingredient relations.
+
+**Matcher scoring.** Exact and identifier matches score 100. A token match scores
+the query length over the name length, so the shortest name containing every
+token ranks first. A fuzzy match takes the better of the whole-string
+`rapidfuzz` ratio and the weakest per-token ratio (each query token paired with
+its closest name token), which handles both "ozempik" and "ozempik pen" without
+letting one good token carry a bad one. Threshold 85, near-miss floor 60, both
+in `[names.match]`.
+
+**Products are grouped by brand, then ingredient, then full name.** Every RXCUI
+that shares a brand name is one product; generics group by ingredient. So
+"Ozempic" is one product with three RXCUIs, and "semaglutide" is three products
+(Ozempic, Rybelsus, Wegovy).

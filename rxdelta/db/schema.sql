@@ -65,13 +65,26 @@ CREATE TABLE IF NOT EXISTS rejected_rows (
     raw_value      TEXT    NOT NULL
 );
 
--- Reference data, not a monthly fact. RXCUI to drug name, resolved once and
--- cached; deliberately not partitioned by snapshot_month.
+-- Reference data, not a monthly fact; deliberately not partitioned by
+-- snapshot_month. One RXCUI has several rows: its full name, each ingredient
+-- and each brand, so any of them can be searched. name_norm is the matching key.
 CREATE TABLE IF NOT EXISTS drug_names (
-    rxcui      TEXT NOT NULL PRIMARY KEY,
+    rxcui      TEXT NOT NULL,
     name       TEXT NOT NULL,
+    name_type  TEXT NOT NULL CHECK (name_type IN ('full', 'ingredient', 'brand')),
+    name_norm  TEXT NOT NULL,
     source     TEXT NOT NULL,
-    fetched_at TEXT NOT NULL
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (rxcui, name_type, name_norm)
+);
+
+-- RXCUIs a name source was asked about and could not resolve, so they are
+-- reported rather than silently dropped, and a rerun does not ask again.
+CREATE TABLE IF NOT EXISTS drug_names_missing (
+    rxcui      TEXT NOT NULL PRIMARY KEY,
+    source     TEXT NOT NULL,
+    reason     TEXT NOT NULL,
+    checked_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ingest_log (
@@ -89,3 +102,5 @@ CREATE INDEX IF NOT EXISTS idx_plan_info_month_form ON plan_info (snapshot_month
 CREATE INDEX IF NOT EXISTS idx_cost_lookup
     ON beneficiary_cost (snapshot_month, contract_id, plan_id, segment_id, tier);
 CREATE INDEX IF NOT EXISTS idx_rejected_month ON rejected_rows (snapshot_month);
+CREATE INDEX IF NOT EXISTS idx_drug_names_norm ON drug_names (name_norm);
+CREATE INDEX IF NOT EXISTS idx_formulary_rxcui ON formulary (snapshot_month, rxcui);

@@ -206,3 +206,79 @@ request_timeout_seconds = 15.0
 max_retries = 3
 # RXCUIs per progress report while refreshing.
 progress_every = 100
+
+# ---------------------------------------------------------------------------
+# Question answering, phase 1: drug name matching, the tool layer, the eval
+# set builder and the eval harness. Nothing below changes load, diff or report.
+# ---------------------------------------------------------------------------
+
+[names.match]
+# Lowest rapidfuzz score, 0 to 100, at which a misspelled name still counts as
+# a match. "ozempik" scores about 86 against "ozempic".
+fuzzy_threshold = 85.0
+# Candidates scoring at or above this but below the threshold are listed as
+# near misses when a lookup finds nothing.
+near_miss_floor = 60.0
+# How many near misses an empty lookup lists.
+near_miss_limit = 5
+
+[tools]
+# Rows a list tool returns when the caller does not pass a limit.
+default_page_size = 25
+
+# Most rows any one call can return. Past this the result is marked truncated,
+# the full total is given, and the note says how to narrow the query.
+[tools.row_caps]
+find_drug = 25
+find_plan = 25
+get_coverage = 50
+get_changes = 100
+count_changes = 100
+
+[evalset]
+# Bump when the builder changes in a way that changes its output.
+builder_version = "1.0"
+# Share of drug mentions written as an RXCUI or NDC instead of a name, to test
+# the identifier path. The share of misspelled items is the typo entry below.
+id_share = 0.08
+
+# Share of generated items per category. Must sum to 1.
+[evalset.mix]
+coverage_lookup = 0.10
+drug_change = 0.15
+filtered_list = 0.15
+count = 0.15
+cost = 0.10
+multi_step = 0.10
+no_answer = 0.10
+ambiguous = 0.05
+out_of_scope = 0.05
+typo = 0.05
+
+# Stratified split per category. Must sum to 1.
+[evalset.splits]
+dev = 0.7
+test = 0.3
+
+# Difficulty is "easy" unless one of these rules lifts it. Hard wins over medium.
+[evalset.difficulty]
+# Minimum number of required tools for medium and for hard.
+medium_min_tools = 2
+hard_min_tools = 3
+# Minimum expected list size for medium and for hard.
+medium_min_list = 3
+hard_min_list = 6
+# A misspelled drug name lifts difficulty one level.
+typo_lifts = true
+
+[eval]
+# Absolute tolerance, in dollars, on each end of a cost range.
+cost_tolerance = 0.01
+# eval run exits nonzero when overall accuracy falls below this.
+min_accuracy = 0.80
+# eval run exits nonzero when the missed refusal rate rises above this.
+max_missed_refusal_rate = 0.05
+# Items run in parallel by default.
+workers = 4
+# Items listed in the report's worst items section.
+worst_items = 20

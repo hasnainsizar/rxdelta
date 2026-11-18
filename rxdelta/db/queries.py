@@ -242,12 +242,16 @@ def cost_rows(
 
 def drug_names(conn: sqlite3.Connection) -> dict[str, str]:
     """RXCUI to name for every cached entry. Reference data, no month filter."""
-    rows = conn.execute("SELECT rxcui, name FROM drug_names WHERE name != ''").fetchall()
+    rows = conn.execute(
+        "SELECT rxcui, name FROM drug_names WHERE name_type = 'full' AND name != ''"
+    ).fetchall()
     return {str(r["rxcui"]): str(r["name"]) for r in rows}
 
 
 def name_cache_size(conn: sqlite3.Connection) -> int:
-    row = conn.execute("SELECT COUNT(*) AS n FROM drug_names WHERE name != ''").fetchone()
+    row = conn.execute(
+        "SELECT COUNT(DISTINCT rxcui) AS n FROM drug_names WHERE name_type = 'full' AND name != ''"
+    ).fetchone()
     return int(row["n"]) if row else 0
 
 

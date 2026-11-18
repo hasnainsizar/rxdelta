@@ -24,7 +24,11 @@ from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
+from rxdelta.names import fetch as names_fetch_module
+from rxdelta.names import fixture as names_fixture
+from rxdelta.names import rrf as names_rrf
 from rxdelta.names import rxnav
+from rxdelta.names import store as names_store
 from rxdelta.names.cache import load_cache, read_csv, write_csv
 from rxdelta.report import format as fmt
 from rxdelta.report import html
@@ -593,7 +597,9 @@ def status(
         console.print(f"Wrote {json_out}")
 
 
-names_app = typer.Typer(no_args_is_help=True, help="Manage the RXCUI to drug name cache.")
+names_app = typer.Typer(
+    no_args_is_help=True, help="Manage drug names: fetch, load and check coverage."
+)
 app.add_typer(names_app, name="names")
 
 
@@ -681,6 +687,117 @@ def names_refresh(
             },
         )
         console.print(f"Wrote {json_out}")
+
+
+@names_app.command("fetch")
+@handle_errors
+def names_fetch(
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Fetch full, ingredient and brand names from RxNav for formulary RXCUIs.
+
+    Skips RXCUIs that already have names or were already reported missing, so
+    it is safe to stop and rerun. Uses the network; nothing else does.
+    """
+    conn = connect(db)
+    config = get_config(config_path)
+    client = names_fetch_module.RxNavClient(config.names)
+
+    def progress(summary: names_fetch_module.FetchSummary, total: int) -> None:
+        done = summary.fetched + summary.not_found + summary.failed
+        console.print(
+            f"  {done:,}/{total:,} checked: {summary.fetched:,} fetched, "
+            f"{summary.not_found:,} not found, {summary.failed:,} failed",
+            highlight=False,
+        )
+
+    console.print(
+        f"Fetching from {config.names.api_base} at up to "
+        f"{config.names.requests_per_second:g} requests per second."
+    )
+    try:
+        summary = names_fetch_module.fetch(
+            conn, client, progress_every=config.names.progress_every, on_progress=progress
+        )
+    finally:
+        client.close()
+    if not summary.in_scope:
+        console.print(
+            "No RXCUIs found in the database. Load a snapshot first: rxdelta load --month YYYY-MM"
+        )
+        return
+    table = Table(title="Name fetch", title_justify="left")
+    table.add_column("Outcome")
+    table.add_column("RXCUIs", justify="right")
+    table.add_row("Fetched", f"{summary.fetched:,}")
+    table.add_row("Already present", f"{summary.already_present:,}")
+    table.add_row("Not found in RxNav", f"{summary.not_found:,}")
+    table.add_row("Failed", f"{summary.failed:,}")
+    console.print(table)
+    if summary.failed:
+        console.print(
+            f"[yellow]{summary.failed:,} RXCUI(s) failed and were not stored.[/yellow] "
+            "Rerun to retry only those."
+        )
+
+
+@names_app.command("load")
+@handle_errors
+def names_load(
+    rrf: Annotated[
+        Path | None, typer.Option("--rrf", help="Path to a local RxNorm RXNCONSO.RRF file.")
+    ] = None,
+    fixture: Annotated[
+        Path | None,
+        typer.Option("--fixture", help="CSV with rxcui, name_type and name columns."),
+    ] = None,
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Load drug names from a local file instead of the network."""
+    if (rrf is None) == (fixture is None):
+        raise RxdeltaError("Pass exactly one of --rrf or --fixture.")
+    conn = connect(db)
+    get_config(config_path)
+    if rrf is not None:
+        outcome = names_rrf.load(conn, rrf)
+        console.print(
+            f"{outcome.named:,} of {outcome.in_scope:,} formulary RXCUI(s) named from {rrf}. "
+            f"{outcome.not_found:,} not in the file, logged as missing."
+        )
+        return
+    assert fixture is not None
+    written = names_fixture.load(conn, fixture)
+    console.print(f"Loaded {written:,} name row(s) from {fixture}.")
+
+
+@names_app.command("status")
+@handle_errors
+def names_status(
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Show how many formulary RXCUIs have names, by source."""
+    conn = connect(db)
+    get_config(config_path)
+    report = names_store.status(conn)
+    if not report.formulary_rxcuis:
+        console.print("No RXCUIs found in the database. Load a snapshot first.")
+        return
+    share = 100.0 * report.named / report.formulary_rxcuis
+    console.print(
+        f"{report.named:,} of {report.formulary_rxcuis:,} formulary RXCUI(s) have names "
+        f"({share:.1f}%). {report.missing:,} have none; {report.logged_not_found:,} of those "
+        "were looked up and not found.",
+        highlight=False,
+    )
+    table = Table(title="Named RXCUIs by source", title_justify="left")
+    table.add_column("Source")
+    table.add_column("RXCUIs", justify="right")
+    for source, count in report.by_source.items():
+        table.add_row(source, f"{count:,}")
+    console.print(table)
 
 
 @app.command()

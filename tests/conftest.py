@@ -41,3 +41,34 @@ def loaded(conn: sqlite3.Connection, config: Config) -> sqlite3.Connection:
     load_month(conn, config, "2024-01", SNAPSHOTS)
     load_month(conn, config, "2024-02", SNAPSHOTS)
     return conn
+
+
+ASK = FIXTURES / "ask"
+ASK_MONTHS = ("2026-01", "2026-02", "2026-03")
+ASK_NAMES = ASK / "drug_names.csv"
+
+
+def build_ask_db(path: Path, config: Config) -> Path:
+    """Three fixture months plus fixture names, the database the eval set uses."""
+    from rxdelta.names import fixture as names_fixture
+
+    connection = connect(path)
+    for month in ASK_MONTHS:
+        load_month(connection, config, month, ASK)
+    names_fixture.load(connection, ASK_NAMES)
+    connection.close()
+    return path
+
+
+@pytest.fixture(scope="session")
+def ask_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Built once per session. Tests must treat it as read only."""
+    return build_ask_db(tmp_path_factory.mktemp("ask") / "ask.db", load_config(CONFIG_PATH))
+
+
+@pytest.fixture
+def ask_conn(ask_db: Path) -> Iterator[sqlite3.Connection]:
+    connection = sqlite3.connect(f"file:{ask_db}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    yield connection
+    connection.close()

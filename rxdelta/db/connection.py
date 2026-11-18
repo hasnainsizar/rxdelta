@@ -6,6 +6,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from rxdelta.db.migrate import migrate_drug_names
+
 DEFAULT_DB_PATH = Path("rxdelta.db")
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -22,5 +24,6 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
+    migrate_drug_names(conn)
     conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
     conn.commit()
