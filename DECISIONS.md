@@ -487,7 +487,9 @@ zero. Only 658 publish a maximum and 9 publish a minimum.
 A zero bound means no bound was published, not a bound of zero dollars. The
 estimator previously took a min and max of 0 at face value and would have priced
 a 25 percent coinsurance tier at exactly $0.00 to $0.00. That is now treated as
-unpriced. The visible consequence is that 286 of 1,367 real change groups carry
+unpriced. (These counts predate the pairing of package code swaps; see
+[package code swaps](#package-code-swaps-were-reported-as-drugs-dropped-and-re-added)
+for the current ones.) The visible consequence is that 286 of 1,367 real change groups carry
 no price at all and 647 have no modal case, which the report states rather than
 filling in. This limitation always existed; on synthetic data, where the
 generator invented populated bounds, it never showed.
@@ -539,6 +541,67 @@ repeats across the 328 formularies. Every NDC in both real months is unhyphenate
 exercised only by the synthetic fixtures. The real rejection rate is zero.
 
 
+### Package code swaps were reported as drugs dropped and re-added
+
+**What was wrong.** CMS lists exactly one NDC per RXCUI per formulary (May 2026:
+1,123,842 rows, 1,123,842 distinct formulary and RXCUI pairs) and changes which
+NDC stands for a drug from one month to the next. The diff compared NDC to NDC.
+A swap therefore came out as one NDC removed and another added, so a drug that
+never left a formulary was reported as dropped and re-added, and anything that
+changed in the same month as the swap (a tier move, a step therapy requirement
+lifted) was never compared, because no single NDC carried both sides.
+
+**How many rows it affected.** Drug and plan changes from `rxdelta diff`, before
+and after the fix, on the three real month pairs:
+
+| | May to June | June to July | May to July |
+|---|---|---|---|
+| changes | 1,030,491 to 222,989 | 471,712 to 266,044 | 1,489,015 to 477,070 |
+| change groups | 1,367 to 686 | 4,339 to 4,138 | 5,515 to 4,720 |
+| drug removed | 465,646 to 62,769 | 218,116 to 112,793 | 677,719 to 169,997 |
+| drug added | 481,042 to 75,523 | 239,164 to 133,841 | 714,163 to 203,759 |
+| tier down | 346 to 380 | 1,891 to 6,557 | 1,436 to 6,136 |
+| tier up | 0 to 0 | 0 to 208 | 0 to 208 |
+| step therapy removed | 323 to 357 | 302 to 496 | 625 to 853 |
+| prior auth added | 79,050 to 79,900 | none | 79,050 to 79,900 |
+
+Between June and July every hidden tier move belongs to four dapagliflozin
+products (the 5 and 10 MG tablets and the two extended release combinations with
+metformin), whose brand NDCs were replaced by generic ones while their tiers
+moved: down on most formularies, up from tier 3 to 6 on 104 plans. For the May
+to June report the fix also changes the pricing counts quoted under
+[coinsurance](#coinsurance-is-unpriceable-on-the-real-files): 235 of 686 groups
+carry no price and 541 have no modal case.
+
+**How it was found.** Not by the diff tests, which use fixtures with one NDC per
+drug that never changes. The question layer (part 6) rolls changes up to RXCUIs,
+and a check of the real months found that 24,179 of the 27,794 RXCUI level
+removals between May and June were drugs still listed on that formulary under
+another NDC. Looking at why showed the one NDC per RXCUI layout, and pairing the
+NDCs then surfaced the tier moves hidden inside swaps. The question tools were
+fixed first; the diff and the report followed, so that all four readers of the
+data use one rule.
+
+**The fix.** `rxdelta/swaps.py` holds the rule: on a formulary pair, an NDC
+removed and an NDC added for the same RXCUI are one drug's before and after, and
+`classify` compares them like any other pair. A removed NDC with no partner is a
+removal only if the RXCUI is gone from the later formulary, and an added one only
+if the RXCUI was absent before. The diff applies it per formulary pair, the
+report and `summary` inherit it from the diff, the question tools take the diff's
+output, and the eval's gold answers call the same function. `tests/test_swaps.py`
+covers the rule directly and, on a fixture with a swap and nothing else, a swap
+with a tier move and a real removal, checks that `diff`, the report, the tools
+and gold all show exactly one tier change and one removal. On the real months
+gold and the tools agree on every row of all three pairs (8,561, 19,041 and
+26,917 rows), and the diff's own output agrees with the tools drug for drug and
+plan for plan. `docs/example-report-cms.html` was regenerated.
+
+Diff and score for May to June went from 21.20 to 6.48 seconds, because most of
+the old changes were never real. The first version was far slower instead: the
+lookup of a formulary's RXCUIs used `SELECT DISTINCT`, and SQLite answered it
+from the `(snapshot_month, rxcui)` index by scanning the whole month, about a
+second per formulary. Without `DISTINCT` it uses the formulary index.
+
 ## Part 5: incidents and open questions
 
 ### `make clean` deleted the real CMS download
@@ -562,10 +625,12 @@ appears in the README.
 - **104 groups share a severity of exactly 60.00.** A hard cluster on a round
   number suggests a term in the score is saturating or falling back to a default
   rather than varying. Not investigated.
-- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 79
-  percent of groups. Real changes cluster into a few archetypes, so the score
-  separates archetypes well and separates within them poorly. The committed CMS
-  report states 150 distinct severity values across 1,367 groups.
+- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 71
+  percent of groups (79 before package code swaps were paired). Real changes
+  cluster into a few archetypes, so the score separates archetypes well and
+  separates within them poorly. With swaps paired the May to June comparison has
+  103 distinct severity values across 686 groups, and the 104 group tie at 60.00
+  is unchanged.
 - **The layout change detection path has never been triggered by data.** May and
   June 2026 share one record layout version, so it fired only because old code
   met new files.
@@ -574,6 +639,10 @@ appears in the README.
   informative number and the report leads with the wrong one.
 
 ### The committed CMS report predates the limitations correction
+
+> Superseded. The real files were downloaded again with `rxdelta fetch-cms` and
+> `docs/example-report-cms.html` was regenerated after package code swaps were
+> paired, so it now carries the corrected limitations text too.
 
 `docs/example-report-cms.html` was generated before the limitations text was
 corrected, and the real files it was built from are gone, so it cannot be
@@ -1064,6 +1133,11 @@ After the fix gold and the tools agree exactly on all three real month pairs
 identical coverage and one that moves Januvia from tier 3 to 4 while its NDC
 changes, so both cases are tested offline.
 
+> Superseded. The pairing was later moved into `rxdelta/swaps.py` and the diff
+> itself, so `diff`, `summary` and `report` use it too; see
+> [package code swaps](#package-code-swaps-were-reported-as-drugs-dropped-and-re-added)
+> in part 4.
+
 The existing `diff` and `report` commands were left as they are, because they
 must not change. They report per NDC and therefore still count swaps as an
 addition plus a removal and still miss coverage changes inside a swap. That is
@@ -1119,3 +1193,48 @@ with the same text, "what dose of trelegy ellipta should i be taking". That
 template names one drug, but the duplicate check keyed on an unused second
 drug too. The builder now keeps only arguments a template uses and refuses any
 question text it has already produced.
+
+### Gold shares the swap rule
+
+Gold was built to share nothing with the tools, so a tool bug could not reach the
+eval set. The package code swap rule is the one exception: it now lives in
+`rxdelta/swaps.py`, and the diff, the report, the tools and gold all call it, so
+the four cannot disagree about what a swap is. The cost is that a bug in that
+rule would be copied into gold and the gold versus tool test would not catch it.
+The rule is therefore tested on its own in `tests/test_swaps.py`, with explicit
+cases, and gold still fetches its rows with its own SQL and classifies pairs with
+its own code rather than the diff's `classify`. The gold import test allows
+`rxdelta.swaps` and still forbids `rxdelta.tools` and `rxdelta.diff`.
+
+### Downloading a release
+
+`rxdelta fetch-cms --release 2026_20260513` turns the one-off range read into a
+command. It finds the release's archive in the data.cms.gov catalog
+(`[source.download]` in config), reads the zip directory from the end of the
+remote file, and unpacks only the inner archives matching `[source.files]`:
+about 10MB instead of 2.3GB. It writes `SOURCE.json` with the URL and each file's
+SHA-256 next to the files. Fetching the July release again reproduced the three
+loaded files hash for hash. `make cms-fetch` fetches all three months.
+
+The eval manifest records each month's release (`"releases"`). It does not trust
+a folder name alone: `rxdelta evalset build --data-dir data` hashes the files
+under each month and requires them to match the SHA-256 the load wrote to
+`ingest_log`, then reads the release from the folder they sit in. The fixture
+set has no releases and records an empty map.
+
+### Questions too big for one tool call
+
+The `over_cap` category (5 percent, taken from `filtered_list`) asks for lists
+whose real answer has more change rows than `get_changes` returns in one call.
+Its expected answer is the number of drugs; the full list is kept as the item's
+`alternative`. A runner is right if it gives the count, or a list marked
+`truncated` that states the right `total` and holds only correct drugs, or the
+complete list. The summary records which path each runner took. The oracle reads
+the first page, sees `truncated`, and takes the total from `count_changes`.
+
+The fixtures have no answer over the real cap of 100 rows, so the fixture set
+reports its `over_cap` quota as a shortfall in the manifest instead of filling
+it with something else. A test builds a set with `get_changes` capped at 5, where
+the fixtures do produce over cap questions, and requires the oracle to score 100
+percent on them through the truncated path with every number grounded.
+

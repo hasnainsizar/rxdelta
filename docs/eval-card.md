@@ -1,15 +1,16 @@
 # Eval card: rxdelta_v1 and rxdelta_fixture_v1
 
-Two sets of 220 questions about Medicare Part D formulary changes, each question
+Two sets of questions about Medicare Part D formulary changes, each question
 with a gold answer, built the same way:
 
-- `evals/rxdelta_v1.jsonl` asks about the real CMS releases for May
+- `evals/rxdelta_v1.jsonl` (220 questions) asks about the real CMS releases for May
   (`2026_20260513`), June (`2026_20260610`) and July (`2026_20260722`) 2026: 6,204
   drugs, 328 formularies and 5,518 plans. It needs the download and
   `rxdelta-cms.db` to run.
-- `evals/rxdelta_fixture_v1.jsonl` asks about the committed three month
-  synthetic fixtures in `tests/fixtures/ask/`. Tests and CI use it because it
-  rebuilds offline in seconds.
+- `evals/rxdelta_fixture_v1.jsonl` (210 questions) asks about the committed
+  three month synthetic fixtures in `tests/fixtures/ask/`. Tests and CI use it
+  because it rebuilds offline in seconds. No fixture answer is longer than a
+  tool's row cap, so its 10 `over_cap` questions are recorded as a shortfall.
 
 Both measure whether a question answering runner (today the oracle and null
 runners, later an agent) gives the right answer, refuses when it should, asks
@@ -56,7 +57,8 @@ drug, a misspelling that still matches, a made-up name that matches nothing.
 |---|---|---|---|
 | coverage_lookup | 10% | How is methimazole 5 mg covered on plan H9207-017 in July, including any prior authorization, step therapy or quantity limit? | coverage |
 | drug_change | 15% | Did anything change for glucagon 5 mg injection between June and 2026-07? | change |
-| filtered_list | 15% | what drugs got added on plan H5471-135 from May to jun | drug_list |
+| filtered_list | 10% | what drugs got added on plan H5471-135 from May to jun | drug_list |
+| over_cap | 5% | what are all the drugs that got dropped from June to jul | count, or a list marked truncated with the total |
 | count | 15% | How many drugs had prior authorization added between May 2026 and Jun 2026? | count |
 | cost | 10% | What is the estimated change in monthly cost for dapagliflozin 10 mg oral tablet on plan H0154-011 between 2026-06 and jul? | cost_range |
 | multi_step | 10% | on the Wellcare Buckeye MyCare Ohio Dual Align plan, what drugs got added between May 2026 and July? | drug_list |
@@ -113,9 +115,10 @@ Stratified by category: 70 percent `dev`, for tuning, and 30 percent
   brand or ingredient name are asked about with strength and dose form
   ("dapagliflozin 10 mg oral tablet"). About 8 percent of mentions are an RXCUI
   or NDC on purpose.
-- **List answers are capped at 50 drugs** (`[evalset].max_list_items`). Real
-  months have questions whose honest answer is thousands of drugs; those are
-  left out rather than asked.
+- **List answers are capped at 50 drugs** (`[evalset].max_list_items`) in the
+  list categories. Questions whose honest answer is longer than one tool call
+  returns are asked in `over_cap`, where the expected answer is the count or a
+  list that says it is partial and states the total.
 - **Three real months, mostly additions and removals.** On real data most
   changes are drugs joining or leaving a formulary; there are only 12 tier
   increases in the whole range, so tier questions lean toward decreases.
@@ -129,6 +132,7 @@ Stratified by category: 70 percent `dev`, for tuning, and 30 percent
 ## Rebuilding
 
 ```bash
+make cms-fetch                                  # the three releases, only the tables read
 make cms-load                                   # the three real months into rxdelta-cms.db
 uv run rxdelta names fetch --db rxdelta-cms.db  # names from RxNav, about an hour
 make evalset                                    # evals/rxdelta_v1.jsonl and its manifest
@@ -139,7 +143,7 @@ The real build runs:
 
 ```bash
 rxdelta evalset build --db rxdelta-cms.db --from 2026-05 --to 2026-07 --n 200 --seed 7 \
-    --handwritten evals/handwritten_real.jsonl --out evals/rxdelta_v1.jsonl
+    --handwritten evals/handwritten_real.jsonl --data-dir data --out evals/rxdelta_v1.jsonl
 ```
 
 The same database, config and seed give a byte identical file; the real set was
@@ -147,6 +151,8 @@ rebuilt and compared to check that. A test rebuilds the fixture set and compares
 it with the committed copy, so a change to the builder, the templates, the
 fixtures or the config that changes it has to come with a rebuilt file. Each
 manifest records the item counts per category and split, the seed, the months,
-the database row counts, the config hash, the file's SHA-256 and the builder
-version. `rxdelta eval run` refuses to run when a file's hash does not match its
+the database row counts, the config hash, the file's SHA-256, the builder
+version and, for the real set, the CMS release behind each month. A release is
+recorded only after the files under `data/` are hashed and found to be the ones
+the load wrote to `ingest_log`. `rxdelta eval run` refuses to run when a file's hash does not match its
 manifest.

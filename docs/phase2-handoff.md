@@ -93,11 +93,15 @@ Tune on `--split dev`. Run `--split test` only when reporting. Compare runs with
   is built from the May, June and July 2026 CMS releases and needs
   `rxdelta-cms.db`; quote Phase 2 numbers from it. `evals/rxdelta_fixture_v1.jsonl`
   is what tests and CI run, offline.
-- **The `diff` and `report` commands still work per NDC.** The tools pair an
-  RXCUI's old and new NDC when CMS swaps them, which on real data hides most
-  "removals" and some tier moves from the NDC diff (part 6 of `DECISIONS.md`).
-  An agent answering from the tools and a person reading the HTML report can
-  therefore see different counts for the same month pair.
+- **One rule for package code swaps.** `diff`, `report`, the tools and gold all
+  pair an RXCUI's old and new NDC through `rxdelta/swaps.py`, so an agent and a
+  person reading the HTML report see the same changes. Gold sharing that rule is
+  a deliberate exception to its independence; see part 6 of `DECISIONS.md`.
+- **Some answers are longer than one call returns.** `get_changes` returns at
+  most 100 rows. The `over_cap` questions expect the agent to notice
+  `truncated`, take the number of drugs from `count_changes`, and either give
+  that count or a partial list marked `truncated` with `total` set. Listing a
+  partial page as if it were the whole answer scores wrong.
 - **`find_drug` returns at most 25 RXCUIs.** On real data many ingredients have
   more forms than that. The eval only asks class and ambiguous questions within
   the cap; an agent facing a bigger class has to narrow the query (a strength, a
