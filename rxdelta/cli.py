@@ -32,6 +32,8 @@ from rxdelta.names import store as names_store
 from rxdelta.names.cache import load_cache, read_csv, write_csv
 from rxdelta.report import format as fmt
 from rxdelta.report import html
+from rxdelta.tools import registry as tool_registry
+from rxdelta.tools.context import ToolContext
 from rxdelta.types import RxdeltaError
 
 app = typer.Typer(
@@ -798,6 +800,64 @@ def names_status(
     for source, count in report.by_source.items():
         table.add_row(source, f"{count:,}")
     console.print(table)
+
+
+tools_app = typer.Typer(no_args_is_help=True, help="Inspect the read-only question tools.")
+app.add_typer(tools_app, name="tools")
+
+
+@tools_app.command("list")
+def tools_list() -> None:
+    """Name and one line description of every tool."""
+    table = Table(title="Tools", title_justify="left")
+    table.add_column("Name")
+    table.add_column("What it does")
+    for spec in tool_registry.TOOLS:
+        table.add_row(spec.name, spec.summary)
+    console.print(table)
+
+
+@tools_app.command("schema")
+@handle_errors
+def tools_schema(
+    output_format: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="anthropic: a list of {name, description, input_schema}. "
+            "json: input and output schemas.",
+        ),
+    ] = "anthropic",
+) -> None:
+    """Print every tool's input schema as JSON."""
+    if output_format == "anthropic":
+        payload: list[dict[str, Any]] = tool_registry.anthropic_tools()
+    elif output_format == "json":
+        payload = tool_registry.json_schemas()
+    else:
+        raise RxdeltaError(f"--format must be anthropic or json, got {output_format!r}")
+    typer.echo(json.dumps(payload, indent=2))
+
+
+@app.command("tool")
+@handle_errors
+def tool_call(
+    name: Annotated[str, typer.Argument(help="Tool name, see rxdelta tools list.")],
+    args: Annotated[str, typer.Option("--args", help="Tool arguments as a JSON object.")] = "{}",
+    pretty: Annotated[bool, typer.Option("--pretty", help="Indent the JSON output.")] = False,
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Call one tool by hand and print its result as JSON."""
+    try:
+        parsed = json.loads(args)
+    except json.JSONDecodeError as exc:
+        raise RxdeltaError(f"--args is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise RxdeltaError('--args must be a JSON object, for example \'{"query": "ozempic"}\'')
+    context = ToolContext(db_path=db, config=get_config(config_path))
+    result = tool_registry.call_tool(name, parsed, context)
+    typer.echo(result.model_dump_json(indent=2 if pretty else None))
 
 
 @app.command()

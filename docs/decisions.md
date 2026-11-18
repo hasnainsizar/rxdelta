@@ -126,3 +126,72 @@ in `[names.match]`.
 that shares a brand name is one product; generics group by ingredient. So
 "Ozempic" is one product with three RXCUIs, and "semaglutide" is three products
 (Ozempic, Rybelsus, Wegovy).
+
+## Tool layer
+
+**An empty answer is `ok=False` with code `no_results`, and still carries data.**
+The envelope has one error slot and the code list includes `no_results`, so an
+empty but valid query uses it: the note says why it is empty (no changes of that
+kind, drug not on that formulary), and `data` holds the empty shape so the
+caller still sees what was searched. `unknown_drug` and `unknown_plan` are used
+when the thing itself is not found. Would change: if Phase 2 prompting works
+better with `ok=True` for empty answers, flip it in `envelope.failure`.
+
+**Unknown formulary IDs return `unknown_plan`.** There is no `unknown_formulary`
+code, `find_plan` is the tool that resolves formulary IDs, and the message says
+which formulary was not found and to use `find_plan`.
+
+**Change rows are one per RXCUI, formulary pair and change type.** The diff works
+per NDC and plan. Questions are asked per drug and formulary, so `get_changes`
+rolls the diff up, keeping the NDCs and plan IDs on each row and counting the
+plans. Rows whose before or after coverage differs in any field stay separate,
+so two NDCs of one RXCUI that changed differently are never merged.
+`formulary_id` is the formulary the plans used in `to_month`;
+`formulary_id_from` is kept for plans that switched formularies, and a
+`formulary_ids` filter matches either.
+
+**`count_changes` returns four counts, not one.** "How many changes" is
+ambiguous: rows (drug, formulary and type combinations), distinct drugs,
+formularies and plans are all reasonable readings. Each group and the total
+carry all four and the description says which is which. The eval's count
+questions ask about drugs and use the `drugs` count.
+
+**Before and after values are canonical strings.** A tier move is `"3"` to
+`"4"`, a flag is `"no"` to `"yes"`, a quantity limit is `"30 per 30 days"` or
+`"none"`, a drug added is `null` to `"tier 3"`. The format lives in
+`rxdelta/ask/values.py` and is shared by the tools, the gold queries and the
+scorer, so comparison never depends on formatting.
+
+**The diff is memoized per database file state and month pair.** On the real
+files `diff_snapshots` takes about ten seconds. The memo key includes the file's
+modification time and size, so a reload invalidates it. Would change: a long
+running server would want a size bound on the memo.
+
+**Provenance keys are not capped.** The prompt asks for exactly which rows
+produced an answer, so `count_changes` lists every row key it counted. On real
+data that can be large. Phase 2 should keep provenance out of the text the model
+reads and use it only for the grounding check. Would change: a config cap with
+a truncation flag, if the size becomes a problem.
+
+**`estimate_cost_change` reuses `tier_cost` and `estimate_impact`, not
+`build_groups`.** `build_groups` prices a whole diff and groups by NDC. The tool
+needs one drug in one scope, so it calls the two functions `build_groups` is made
+of, per plan, and spans the plans with the same min and max rule as
+`impact._merge`. When the tier did not change, the change range is zero and the
+note says other changes do not show in the figure. When the drug joins or
+leaves the formulary, the existing open ended rule applies and the note says so.
+
+**The plan ID format is `H1234-001` or `H1234-001-000`.** The segment defaults to
+`000`, which is what the plan file uses for single segment plans.
+
+**Tool schemas are post-processed.** Pydantic emits `$defs` for the change type
+enum and `anyOf [X, null]` for optional fields. The exported schemas inline every
+reference, drop titles, and turn an optional field into the plain type with no
+`null`, because an omitted field already means "no filter". `required` is taken
+from the model, so it always matches what validation enforces.
+
+**There is no JSON Schema validator dependency.** The schema test checks the
+structure that matters (no references, valid type names, required fields that
+exist and match the model, every example round trips through its input model)
+rather than adding `jsonschema`, which the prompt's dependency rule would need a
+justification for.
