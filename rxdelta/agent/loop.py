@@ -37,6 +37,10 @@ REMINDER = (
     "answer and final_text."
 )
 Event = Callable[[str, dict[str, Any]], None]
+CUT_OFF = (
+    "Your response reached the output token limit, so this call was cut off and not run. "
+    "Send it again in full; leave out text that is not needed."
+)
 API_ERROR = "api error"
 ACCOUNT_ERROR = "account error"
 
@@ -244,6 +248,12 @@ class AgentRunner:
                     "per question cap"
                 )
             uses = response.tool_uses()
+            if uses and response.stop_reason == "max_tokens":
+                self._emit(run, "cut_off", {"max_tokens": s.max_tokens})
+                run.messages.append(
+                    {"role": "user", "content": [_error_result(u["id"], CUT_OFF) for u in uses]}
+                )
+                continue
             if not uses:
                 self._plain_stop(run, response.stop_reason)
                 continue

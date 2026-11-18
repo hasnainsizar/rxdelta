@@ -338,8 +338,9 @@ worst_items = 20
 default_model = "claude-haiku-5-5"
 # System prompt file rxdelta/agent/prompts/system_<version>.md used by default.
 prompt_version = "v1"
-# Most output tokens one model response may use, thinking included.
-max_tokens = 8192
+# Most output tokens one model response may use, thinking included. A change
+# answer for a drug removed from 328 formularies runs to about 15,000 tokens.
+max_tokens = 32000
 # Thinking effort sent with every request: low, medium, high, xhigh or max.
 effort = "medium"
 # Model responses allowed per question before the run ends with an error.

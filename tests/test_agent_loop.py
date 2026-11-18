@@ -276,6 +276,21 @@ def test_plain_text_stop_gets_one_reminder(ctx: ToolContext) -> None:
     assert client.requests[1].messages[-1] == {"role": "user", "content": REMINDER}
 
 
+def test_a_cut_off_response_is_resent_not_run(ctx: ToolContext) -> None:
+    from rxdelta.agent.loop import CUT_OFF
+
+    cut = turn(submit({"kind": "count"}, "Partial"))
+    cut = cut.model_copy(update={"stop_reason": "max_tokens"})
+    runner, client = agent(ctx, [cut, turn(submit({"kind": "refusal"}, "Out of scope."))])
+    out = _ask(runner)
+    assert out.error is None and out.answer.kind == "refusal"
+    sent = _sent(client.requests[1].messages)
+    assert sent[0]["content"] == CUT_OFF and sent[0]["is_error"] is True
+    assert out.trace is not None
+    assert len(out.trace["drafts"]) == 1
+    assert out.trace["events"][0]["type"] == "cut_off"
+
+
 def test_plain_text_twice_ends_with_error(ctx: ToolContext) -> None:
     runner, _ = agent(ctx, [text_turn("One."), text_turn("Two.")])
     out = _ask(runner)

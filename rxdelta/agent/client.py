@@ -114,22 +114,23 @@ class AnthropicClient:
 
     def create(self, request: ModelRequest) -> ModelResponse:
         errors = self._anthropic
+        params: dict[str, Any] = {
+            "model": request.model,
+            "max_tokens": request.max_tokens,
+            "system": [
+                {"type": "text", "text": request.system, "cache_control": {"type": "ephemeral"}}
+            ],
+            "messages": request.messages,
+            "output_config": {"effort": request.effort},
+            "cache_control": {"type": "ephemeral"},
+        }
+        if request.tools:
+            params["tools"] = _cached_tools(request.tools)
         try:
-            message = self._client.messages.create(  # type: ignore[call-overload]
-                model=request.model,
-                max_tokens=request.max_tokens,
-                system=[
-                    {
-                        "type": "text",
-                        "text": request.system,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=request.messages,
-                output_config={"effort": request.effort},
-                cache_control={"type": "ephemeral"},
-                **({"tools": _cached_tools(request.tools)} if request.tools else {}),
-            )
+            # Streamed, because a long answer can need a large max_tokens and the SDK
+            # refuses large non-streaming requests that could pass its timeout.
+            with self._client.messages.stream(**params) as stream:
+                message = stream.get_final_message()
         except errors.APIStatusError as exc:
             account = exc.status_code in (401, 403) or "credit balance" in str(exc.message)
             raise ModelError(

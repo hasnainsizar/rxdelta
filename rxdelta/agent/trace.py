@@ -63,6 +63,8 @@ def render(record: dict[str, Any]) -> str:
             )
         elif kind == "reminder":
             lines.append(f"  reminder sent after a plain text stop ({event.get('stop_reason')})")
+        elif kind == "cut_off":
+            lines.append(f"  response cut off at {event.get('max_tokens')} output tokens, resent")
         elif kind == "accepted":
             lines.append(f"  answer accepted ({event.get('kind')})")
         elif kind == "stopped":
