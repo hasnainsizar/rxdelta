@@ -257,6 +257,9 @@ typo_spill_share = 0.25
 typo_attempts = 8
 # Candidate draws per wanted item before a category is reported short.
 attempts_per_item = 200
+# Largest drug list a list question may expect. A question whose answer is
+# thousands of drugs tests paging, not understanding.
+max_list_items = 50
 
 # Share of generated items per category. Must sum to 1.
 [evalset.mix]

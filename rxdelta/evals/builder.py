@@ -53,6 +53,8 @@ from rxdelta.types import ChangeType, RxdeltaError
 
 SET_PREFIX = "rxd-v1"
 _STRENGTH = re.compile(r"(\d+(?:\.\d+)?)\s*(MG|MCG|UNT/ML|MG/ML)\b")
+# The dose form words after the strength, up to a bracketed brand: "Oral Tablet".
+_FORM = re.compile(r"(?:MG|MCG|UNT/ML|MG/ML)\s+((?:[A-Za-z]+\s?){1,3}?)\s*(?:\[|$)")
 _PARENS = re.compile(r"\s*\([^)]*\)\s*")
 
 
@@ -160,9 +162,14 @@ class Facts:
         full = next((str(n) for t, n in rows if t == "full"), "")
         strength = _STRENGTH.search(full)
         suffix = f" {strength.group(1)} {strength.group(2).lower()}" if strength else ""
+        form = _FORM.search(full)
         candidates = brands + ingredients
         if suffix:
             candidates += [b + suffix for b in brands] + [i + suffix for i in ingredients]
+            if form:
+                with_form = f"{suffix} {form.group(1).strip().lower()}"
+                candidates += [i + with_form for i in ingredients]
+                candidates += [b + with_form for b in brands]
         # A mention must resolve exactly, never by resemblance to another name.
         return [c for c in dict.fromkeys(candidates) if self.resolves(c, fuzzy=False) == {rxcui}]
 
@@ -175,7 +182,9 @@ class Facts:
         for (name,) in rows:
             matched = self.resolves(str(name), fuzzy=False)
             by_sql = set(gold.rxcuis_named(self.conn, normalize_name(str(name))))
-            if len(matched) > 1 and matched == by_sql:
+            # The tool returns at most its row cap, so a name with more drugs
+            # than that cannot be clarified in full.
+            if 1 < len(matched) <= self.config.tools.cap("find_drug") and matched == by_sql:
                 found.append((str(name), sorted(matched)))
         return found
 
@@ -195,7 +204,7 @@ class Facts:
             members = gold.rxcuis_with_token(self.conn, token)
             products = {gold.product_of(self.conn, r) for r in members}
             if (
-                len(members) >= 3
+                3 <= len(members) <= self.config.tools.cap("find_drug")
                 and len(products) >= 3
                 and self.resolves(token, fuzzy=False) == set(members)
             ):
@@ -228,7 +237,9 @@ class Generator:
 
     def mention(self, rxcui: str, *, allow_id: bool = True) -> str | None:
         names = self.f.mentions.get(rxcui, [])
-        if allow_id and (not names or self.rng.random() < self.id_share):
+        # An ID only at the configured share, never as a fallback for a drug with
+        # no unique name; such a drug is skipped instead.
+        if allow_id and self.rng.random() < self.id_share:
             if self.rng.random() < 0.5 or rxcui not in self.f.ndcs:
                 return f"RXCUI {rxcui}"
             return f"NDC {self.f.ndcs[rxcui]}"
@@ -747,7 +758,7 @@ def difficulty(
     return levels[level]
 
 
-def _wanted(category: Category, answer: Any, tags: list[str]) -> bool:
+def _wanted(category: Category, answer: Any, tags: list[str], max_list: int) -> bool:
     """Whether a generated candidate's gold answer is the kind its category needs."""
     if category == "ambiguous":
         clarify, alternative = answer
@@ -765,7 +776,7 @@ def _wanted(category: Category, answer: Any, tags: list[str]) -> bool:
     if category == "out_of_scope":
         return bool(answer.kind == "refusal")
     if category in ("filtered_list", "multi_step"):
-        return isinstance(answer, DrugListAnswer)
+        return isinstance(answer, DrugListAnswer) and len(answer.rxcuis) <= max_list
     return not isinstance(answer, NoDataAnswer)
 
 
@@ -827,7 +838,9 @@ def build(
         ):
             return False
         answer = _evaluate(conn, config, cand.query, cand.args)
-        if answer is None or not _wanted(cand.category, answer, cand.tags):
+        if answer is None or not _wanted(
+            cand.category, answer, cand.tags, config.evalset.max_list_items
+        ):
             return False
         seen.add(cand.key)
         asked.add(cand.question)

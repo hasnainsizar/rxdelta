@@ -248,6 +248,7 @@ class EvalsetConfig(_Section):
     typo_spill_share: float = Field(ge=0, le=1)
     typo_attempts: int = Field(ge=1)
     attempts_per_item: int = Field(ge=1)
+    max_list_items: int = Field(ge=1)
     mix: dict[Category, float]
     no_answer_mix: dict[NoAnswerKind, float]
     splits: SplitRatios

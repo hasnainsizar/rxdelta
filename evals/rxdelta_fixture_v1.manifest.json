@@ -1,7 +1,7 @@
 {
   "eval_set": "rxdelta_fixture_v1",
   "file": "rxdelta_fixture_v1.jsonl",
-  "file_sha256": "a9e3ba82b516fe1b3eec30fdad3e67c625352b0e6ba94d9717320b415d0960f7",
+  "file_sha256": "3114a4b4ac8e020b98cf07d63343e331e8c666fe70165d43b51eee507e0021d2",
   "builder_version": "1.0",
   "seed": 7,
   "n_generated": 200,
@@ -80,5 +80,5 @@
     "drug_names": 821,
     "ingest_log": 9
   },
-  "config_sha256": "95d4f6212183e42d12a3bc48bd382a2d0312210739c5294035678162d512e6ae"
+  "config_sha256": "6b3ab19184e577f545a9a37745b8e99ee1198a3c0b6021b8f5fda6d5b960a04e"
 }
