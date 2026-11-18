@@ -257,8 +257,10 @@ def name_cache_size(conn: sqlite3.Connection) -> int:
 
 def formulary_rxcuis(conn: sqlite3.Connection, month: str, formulary_id: str) -> set[str]:
     """Every RXCUI a formulary lists in one month, under any NDC."""
+    # No DISTINCT: with it SQLite picks the (month, rxcui) index and scans the
+    # whole month, about a second per formulary on the real files.
     rows = conn.execute(
-        "SELECT DISTINCT rxcui FROM formulary WHERE snapshot_month = ? AND formulary_id = ?",
+        "SELECT rxcui FROM formulary WHERE snapshot_month = ? AND formulary_id = ?",
         (month, formulary_id),
     ).fetchall()
     return {str(r["rxcui"]) for r in rows}
