@@ -88,8 +88,35 @@ def agent_summary(
         "usage": dict(usage),
         "cache_hit_share": _rate(usage["cache_read_tokens"], prompt),
         "cost_per_question": round(sum(o.cost_usd for _, o, _ in traced) / len(traced), 6),
+        "cost_per_correct": _per_correct(traced),
         "errors": sum(1 for _, o, _ in traced if o.error),
+        "stopped_by": stop_reasons([o for _, o, _ in traced]),
     }
+
+
+def _per_correct(traced: list[tuple[str, RunnerOutput, ItemScore]]) -> float | None:
+    correct = sum(1 for _, _, s in traced if s.correct)
+    total = sum(o.cost_usd for _, o, _ in traced)
+    return round(total / correct, 6) if correct else None
+
+
+def stop_reasons(outputs: list[RunnerOutput]) -> dict[str, int]:
+    """Answers that ended with an error, by what ended them."""
+    kinds = {
+        "model turns": "turn_limit",
+        "tool calls": "tool_call_limit",
+        "per question cap": "cost_cap",
+        "plain text": "plain_text",
+        "api error": "api_error",
+        "did not validate": "schema",
+        "stop reason refusal": "model_refusal",
+    }
+    counts = dict.fromkeys([*kinds.values(), "other"], 0)
+    for output in outputs:
+        if output.error:
+            found = next((v for k, v in kinds.items() if k in output.error), "other")
+            counts[found] += 1
+    return counts
 
 
 def repeat_summary(ids: list[str], repeats: list[int], scores: list[ItemScore]) -> dict[str, Any]:

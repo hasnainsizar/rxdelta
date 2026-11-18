@@ -347,7 +347,7 @@ max_turns = 12
 # Tool calls allowed per question, submit_answer excluded.
 max_tool_calls = 24
 # Spend allowed per question, in US dollars, before the run ends with an error.
-max_cost_per_question_usd = 0.25
+max_cost_per_question_usd = 0.50
 # A tool result the model reads is shortened past this many characters of JSON.
 max_tool_result_chars = 24000
 # Reminders sent when the model stops with plain text instead of submit_answer.
@@ -357,7 +357,7 @@ request_timeout_seconds = 120.0
 # Retries the SDK makes after a 429, a 5xx or a connection error.
 max_retries = 4
 # Total spend, in US dollars, that scored runs may reach across the ledger.
-budget_usd = 30.0
+budget_usd = 50.0
 # One line per scored run: date, run folder, model, items, cost.
 ledger_path = "runs/spend.jsonl"
 

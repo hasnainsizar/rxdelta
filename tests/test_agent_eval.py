@@ -88,6 +88,9 @@ def test_repeats_report_the_spread_and_consistency(
     assert agent["settings"]["model"] == "claude-haiku-5-5"
     assert agent["turns"]["mean"] == 1.0
     assert agent["first_draft_ungrounded_rate"] == 0.0
+    # 9 answers at 1000 input and 100 output tokens on Haiku, 5 of them right.
+    assert agent["cost_per_correct"] == pytest.approx(9 * 0.00015 / 5)
+    assert sum(agent["stopped_by"].values()) == 0
 
 
 def test_estimate_refuses_a_run_over_budget(tmp_path: Path, config: Config) -> None:

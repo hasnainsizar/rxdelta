@@ -288,12 +288,37 @@ def test_max_tool_calls_ends_with_error(ctx: ToolContext) -> None:
     assert len(out.tool_calls) == 3
 
 
+def test_stop_reasons_are_counted() -> None:
+    from rxdelta.ask.answer import NoDataAnswer, NoDataReason, RunnerOutput
+    from rxdelta.evals.agent_metrics import stop_reasons
+
+    def failed(error: str | None) -> RunnerOutput:
+        return RunnerOutput(
+            answer=NoDataAnswer(reason=NoDataReason.no_matching_changes),
+            final_text="",
+            latency_ms=0,
+            error=error,
+        )
+
+    counts = stop_reasons(
+        [
+            failed("limit: reached 12 model turns without an accepted answer"),
+            failed("limit: spent $0.6, over the $0.5 per question cap"),
+            failed("api error RateLimitError: HTTP 429"),
+            failed(None),
+        ]
+    )
+    assert counts["turn_limit"] == counts["cost_cap"] == counts["api_error"] == 1
+    assert sum(counts.values()) == 3
+
+
 def test_cost_cap_ends_with_error(ctx: ToolContext) -> None:
     expensive = Usage(input_tokens=10_000_000, output_tokens=0)
     runner, _ = agent(ctx, [turn(tool_use("list_months", {}, 1), usage=expensive)])
     out = _ask(runner)
     assert out.error is not None and "per question cap" in out.error
     assert out.cost_usd == pytest.approx(1.0)
+    assert ctx.config.agent.max_cost_per_question_usd == 0.5
 
 
 def test_an_api_error_ends_the_item_with_its_type(ctx: ToolContext) -> None:

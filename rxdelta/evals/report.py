@@ -43,6 +43,12 @@ def _agent_lines(summary: dict[str, Any]) -> list[str]:
         f"| turns per question, mean | {agent['turns']['mean']:.2f} |",
         f"| cache hit share | {_pct(agent['cache_hit_share'])} |",
         f"| cost per question | ${agent['cost_per_question']:.4f} |",
+        "| cost per correct answer | "
+        + (f"${agent['cost_per_correct']:.4f}" if agent["cost_per_correct"] else "n/a")
+        + " |",
+        "| answers stopped by a limit or error | "
+        + (", ".join(f"{k} {v}" for k, v in agent["stopped_by"].items() if v) or "none")
+        + " |",
         f"| run cost | ${summary['run_cost_usd']:.4f} |",
         f"| latency p50, p95 | {summary['cost_speed']['latency_ms']['p50']:.0f} ms, "
         f"{summary['cost_speed']['latency_ms']['p95']:.0f} ms |",

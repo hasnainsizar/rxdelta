@@ -117,6 +117,8 @@ tbody td { padding: var(--s-3) var(--s-3) var(--s-3) 0; border-bottom: 1px solid
       <div><dt>Turns per question</dt><dd>{{ "%.2f"|format(a.turns.mean) }}</dd></div>
       <div><dt>Cache hit share</dt><dd>{{ pct(a.cache_hit_share) }}</dd></div>
       <div><dt>Cost per question</dt><dd>${{ "%.4f"|format(a.cost_per_question) }}</dd></div>
+      <div><dt>Cost per correct answer</dt><dd>{% if a.cost_per_correct %}${{ "%.4f"|format(a.cost_per_correct) }}{% else %}n/a{% endif %}</dd></div>
+      <div><dt>Stopped by a limit or error</dt><dd>{{ a.errors }}</dd></div>
       <div><dt>p50 latency</dt><dd>{{ "%.0f"|format(s.cost_speed.latency_ms.p50) }} ms</dd></div>
     </dl>
     <table>

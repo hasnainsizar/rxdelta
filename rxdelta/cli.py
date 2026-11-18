@@ -1185,10 +1185,14 @@ def eval_run(
             f"max {_pct(reps['max'])}, stdev {100 * reps['stdev']:.1f} points. First draft "
             f"ungrounded {_pct(agent['first_draft_ungrounded_rate'])}, final "
             f"{_pct(agent['final_ungrounded_rate'])}. Cost ${summary['run_cost_usd']:.4f} "
-            f"(${agent['cost_per_question']:.4f} per answer), cache hit share "
+            f"(${agent['cost_per_question']:.4f} per answer, "
+            f"${agent['cost_per_correct'] or 0:.4f} per correct answer), cache hit share "
             f"{_pct(agent['cache_hit_share'])}.",
             highlight=False,
         )
+    if agent and agent["errors"]:
+        stopped = ", ".join(f"{k} {v}" for k, v in agent["stopped_by"].items() if v)
+        err_console.print(f"[yellow]Answers ended by a limit or error: {stopped}.[/yellow]")
     if summary.get("stopped_early"):
         err_console.print(f"[yellow]Stopped early, {summary['stopped_early']}.[/yellow]")
     if "ledger_total_usd" in summary:
