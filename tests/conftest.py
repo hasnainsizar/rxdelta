@@ -72,3 +72,31 @@ def ask_conn(ask_db: Path) -> Iterator[sqlite3.Connection]:
     connection.row_factory = sqlite3.Row
     yield connection
     connection.close()
+
+
+REPO = Path(__file__).resolve().parents[1]
+EVAL_SET = REPO / "evals" / "rxdelta_v1.jsonl"
+HANDWRITTEN = REPO / "evals" / "handwritten.jsonl"
+
+
+def build_cli_eval_db(path: Path) -> Path:
+    """The database `make evaldb` builds, made through the CLI the same way."""
+    from typer.testing import CliRunner
+
+    from rxdelta.cli import app
+
+    runner = CliRunner()
+    for month in ASK_MONTHS:
+        result = runner.invoke(
+            app, ["load", "--month", month, "--dir", str(ASK), "--db", str(path)]
+        )
+        assert result.exit_code == 0, result.output
+    result = runner.invoke(app, ["names", "load", "--fixture", str(ASK_NAMES), "--db", str(path)])
+    assert result.exit_code == 0, result.output
+    return path
+
+
+@pytest.fixture(scope="session")
+def eval_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Same contents as `make evaldb`, which the committed eval set was built from."""
+    return build_cli_eval_db(tmp_path_factory.mktemp("evaldb") / "evals.db")

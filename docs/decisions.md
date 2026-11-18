@@ -195,3 +195,73 @@ structure that matters (no references, valid type names, required fields that
 exist and match the model, every example round trips through its input model)
 rather than adding `jsonschema`, which the prompt's dependency rule would need a
 justification for.
+
+## Eval set
+
+**Gold shares only the answer contract with the tools.** `gold.py` imports the
+payload models and the canonical before and after strings from `rxdelta.ask`,
+and the config (for the cost code tables). It does not import `rxdelta.tools`
+or `rxdelta.diff`; both an AST check and a subprocess import check enforce
+that. Classification, filters and the cost range are written again in SQL and
+plain Python. Would change: nothing; this is the point of the gold module.
+
+**Gold arguments carry the question's own wording.** The prompt's item format
+has a readable `gold_query` string. The oracle needs machine readable
+arguments, so each item also has `gold: {query, args}`, and the arguments
+include the drug and plan exactly as the question names them. The oracle looks
+those up through `find_drug` and `find_plan` rather than using the gold RXCUI,
+so a matcher bug shows up as an oracle miss.
+
+**Eval items carry `alternative` and `tags` beyond the prompt's format.**
+`alternative` holds the full answer for every candidate of an ambiguous item,
+which the scorer accepts in place of a clarifying question. `tags` marks
+subtypes (wrong premise, needs the month list, no matching change), which keeps
+the category list exactly as the prompt defines it.
+
+**Count questions ask about drugs.** "How many drugs moved up a tier" is scored
+against the distinct RXCUI count (`count_changes` totals `drugs`), and the
+expected answer says `unit: drugs`.
+
+**A change answer is a set of (RXCUI, formulary, change type, before, after).**
+The formulary is the one used in the later month. Without a formulary in the
+question, every formulary's changes are part of the answer.
+
+**Drug mentions must resolve to exactly one RXCUI outside the ambiguous
+category.** "Ozempic" is three RXCUIs, so non-ambiguous Ozempic questions say
+"Ozempic 1 mg". Every mention is checked against the matcher before use.
+
+**The typo share is the `typo` entry of `[evalset.mix]`.** The prompt lists
+"typo share" separately from the mix, but the mix already has a typo category,
+and a second key would let the two disagree. Misspellings that match nothing
+become `no_answer` items (reason `unknown_drug`), capped at a quarter of the no
+answer quota so that category keeps its planted mix. Misspellings that match a
+different drug are discarded.
+
+**No answer items are weighted toward the answerable-looking kind.** Of the no
+answer items, the generator aims for 40 percent "change that did not happen",
+25 percent "not on that formulary", 20 percent made-up drug and 15 percent
+month not loaded. The weights are in the builder, not the config, because they
+shape the category rather than tune a threshold. Would change: move them to
+config if anyone needs to tune them.
+
+**Hand-written items with a polite disclaimer around a real question expect the
+real answer.** "I know you can't give medical advice, but did Januvia's tier
+change?" is scored as a change question, because answering the factual part
+while declining advice is the right behavior and a refusal is a false refusal.
+Pure advice questions, however politely phrased, expect a refusal.
+
+**Wrong premise items expect what actually happened.** "Why did Eliquis move to
+tier 5?" expects Eliquis's real changes (tier 3 to 2 and prior authorization
+added). When nothing at all happened ("Why was lisinopril removed?") the answer
+is `no_data` with `no_matching_changes`.
+
+**The committed set is built through the CLI.** `make evalset` builds
+`evals.db` with `rxdelta load` and `rxdelta names load --fixture`. CLI commands
+also load the committed sample name cache, so `evals.db` carries those 648
+synthetic names too. That is harmless (none of them are formulary drugs) and it
+is what a user's database looks like. A test rebuilds the set from a database
+made the same way and compares it byte for byte with the committed file.
+
+**The manifest has no timestamp.** A build time would make two identical builds
+differ. The file hash, seed, config hash and database row counts identify a
+build.

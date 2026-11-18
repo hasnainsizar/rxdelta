@@ -14,7 +14,7 @@ else
 OPEN := xdg-open
 endif
 
-.PHONY: help install sample load diff summary report demo test lint typecheck check coverage bench example names distribution cms-load cms-example cms-distribution cms-bench clean
+.PHONY: help install sample load diff summary report demo test lint typecheck check coverage bench example names distribution cms-load cms-example cms-distribution cms-bench clean ask-fixtures evaldb evalset eval-oracle eval-null
 
 help:
 	@echo "make demo       generate sample data, load both months, diff, open the report"
@@ -29,6 +29,8 @@ help:
 	@echo "make example    regenerate docs/example-report.html"
 	@echo "make cms-load   load the real CMS months (requires the download)"
 	@echo "make cms-example regenerate docs/example-report-cms.html from real data"
+	@echo "make evalset    rebuild evals/rxdelta_v1.jsonl from the fixture database"
+	@echo "make eval-oracle score the oracle runner on the dev split"
 	@echo "make clean      remove the database, generated data and report"
 
 install:
@@ -115,3 +117,29 @@ clean:
 	rm -f rxdelta.db rxdelta.db-wal rxdelta.db-shm report.html
 	rm -rf .pytest_cache .coverage .mypy_cache .ruff_cache
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+
+# The question eval set. Built from the committed three month fixtures so it is
+# reproducible offline; rebuild it from real months once they are loaded.
+EVAL_SET  ?= evals/rxdelta_v1.jsonl
+EVAL_SEED ?= 7
+
+ask-fixtures:
+	$(RUN) python scripts/build_ask_fixtures.py --out tests/fixtures/ask
+
+# The database path is written out, not a variable, for the same reason as clean.
+evaldb:
+	rm -f evals.db evals.db-wal evals.db-shm
+	$(RUN) rxdelta load --month 2026-01 --dir tests/fixtures/ask --db evals.db
+	$(RUN) rxdelta load --month 2026-02 --dir tests/fixtures/ask --db evals.db
+	$(RUN) rxdelta load --month 2026-03 --dir tests/fixtures/ask --db evals.db
+	$(RUN) rxdelta names load --fixture tests/fixtures/ask/drug_names.csv --db evals.db
+
+evalset: evaldb
+	$(RUN) rxdelta evalset build --db evals.db --from 2026-01 --to 2026-03 --n 200 \
+		--seed $(EVAL_SEED) --out $(EVAL_SET)
+
+eval-oracle:
+	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner oracle --split dev --db evals.db
+
+eval-null:
+	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner null --split dev --db evals.db

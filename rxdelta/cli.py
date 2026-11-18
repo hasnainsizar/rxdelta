@@ -17,11 +17,12 @@ from rich.console import Console
 from rich.table import Table
 
 from rxdelta import __version__
-from rxdelta.config import Config, get_config
+from rxdelta.config import CATEGORIES, Config, get_config
 from rxdelta.db import DEFAULT_DB_PATH, connect, queries
 from rxdelta.diff import impact
 from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
+from rxdelta.evals import builder as evalset_builder
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
 from rxdelta.names import fetch as names_fetch_module
@@ -858,6 +859,60 @@ def tool_call(
     context = ToolContext(db_path=db, config=get_config(config_path))
     result = tool_registry.call_tool(name, parsed, context)
     typer.echo(result.model_dump_json(indent=2 if pretty else None))
+
+
+evalset_app = typer.Typer(no_args_is_help=True, help="Build the question eval set.")
+app.add_typer(evalset_app, name="evalset")
+
+
+@evalset_app.command("build")
+@handle_errors
+def evalset_build(
+    db: Annotated[Path, typer.Option("--db", help="Database to compute gold answers from.")],
+    month_from: Annotated[str, typer.Option("--from", help="First month to draw from.")],
+    month_to: Annotated[str, typer.Option("--to", help="Last month to draw from.")],
+    out: Annotated[Path, typer.Option("--out", help="Eval set file to write (.jsonl).")],
+    n: Annotated[int, typer.Option("--n", help="Generated items, before hand-written ones.")] = 200,
+    seed: Annotated[int, typer.Option("--seed", help="Random seed.")] = 7,
+    handwritten: Annotated[
+        Path | None,
+        typer.Option("--handwritten", help="Hand-written items to merge in."),
+    ] = Path("evals/handwritten.jsonl"),
+    config_path: ConfigOption = None,
+) -> None:
+    """Build a deterministic eval set with gold answers computed from the database."""
+    config = get_config(config_path)
+    hand = handwritten if handwritten and handwritten.is_file() else None
+    result, manifest = evalset_builder.build_file(
+        db,
+        config,
+        month_from=month_from,
+        month_to=month_to,
+        n=n,
+        seed=seed,
+        out=out,
+        handwritten_path=hand,
+    )
+    table = Table(title=f"Eval set {out}", title_justify="left")
+    table.add_column("Category")
+    table.add_column("dev", justify="right")
+    table.add_column("test", justify="right")
+    for category in CATEGORIES:
+        members = [i for i in result.items if i.category == category]
+        table.add_row(
+            category,
+            str(sum(1 for i in members if i.split == "dev")),
+            str(sum(1 for i in members if i.split == "test")),
+        )
+    console.print(table)
+    console.print(f"{len(result.items)} item(s) written. Manifest: {manifest}")
+    if hand is None:
+        console.print("[yellow]No hand-written items merged.[/yellow]")
+    for short, missing in result.shortfalls.items():
+        console.print(
+            f"[yellow]{short}: {missing} fewer item(s) than the mix asks for.[/yellow] "
+            "The database does not hold enough distinct facts for that category."
+        )
 
 
 @app.command()
