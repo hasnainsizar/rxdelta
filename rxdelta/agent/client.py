@@ -122,10 +122,10 @@ class AnthropicClient:
                         "cache_control": {"type": "ephemeral"},
                     }
                 ],
-                tools=_cached_tools(request.tools),
                 messages=request.messages,
                 output_config={"effort": request.effort},
                 cache_control={"type": "ephemeral"},
+                **({"tools": _cached_tools(request.tools)} if request.tools else {}),
             )
         except errors.APIStatusError as exc:
             raise ModelError(type(exc).__name__, f"HTTP {exc.status_code}: {exc.message}") from exc

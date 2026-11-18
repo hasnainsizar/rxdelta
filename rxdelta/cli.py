@@ -23,7 +23,7 @@ from rxdelta.agent import trace as agent_trace
 from rxdelta.agent.budget import Ledger
 from rxdelta.agent.budget import check as check_budget
 from rxdelta.agent.budget import estimate as estimate_spend
-from rxdelta.agent.client import ModelClient, ReplayClient
+from rxdelta.agent.client import ModelClient, ReplayClient, cost_usd
 from rxdelta.agent.loop import AgentRunner, AgentSettings, default_client
 from rxdelta.ask.answer import QuestionContext
 from rxdelta.config import CATEGORIES, Config, get_config
@@ -34,6 +34,7 @@ from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
 from rxdelta.evals import builder as evalset_builder
 from rxdelta.evals import harness as eval_harness
+from rxdelta.evals import paraphrase
 from rxdelta.ingest import download as cms_download
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
@@ -951,6 +952,63 @@ def evalset_build(
             f"[yellow]{short}: {missing} fewer item(s) than the mix asks for.[/yellow] "
             "The database does not hold enough distinct facts for that category."
         )
+
+
+@evalset_app.command("paraphrase-draft")
+@handle_errors
+def evalset_paraphrase_draft(
+    set_path: Annotated[Path, typer.Option("--set", help="Eval set to paraphrase.")] = Path(
+        "evals/rxdelta_v1.jsonl"
+    ),
+    n: Annotated[int, typer.Option("--n", min=1, help="Dev items, spread over categories.")] = 40,
+    model: Annotated[str | None, typer.Option("--model", help="Model ID.")] = None,
+    out: Annotated[Path, typer.Option("--out", help="Candidate CSV.")] = Path(
+        "evals/paraphrase_candidates.csv"
+    ),
+    config_path: ConfigOption = None,
+) -> None:
+    """Draft one casual paraphrase per item with a model, for a person to approve."""
+    config = get_config(config_path)
+    chosen = model or config.agent.default_model
+    prices = config.agent.prices(chosen)
+    ledger = Ledger(config.resolve(config.agent.ledger_path))
+    estimated = estimate_spend(config.agent, ledger, chosen, 0)
+    if estimated.spent >= config.agent.budget_usd:
+        raise RxdeltaError("The ledger is already at [agent].budget_usd.")
+    drafted = paraphrase.draft(
+        set_path, n, make_agent_client(config), chosen, max_tokens=1024, effort="low"
+    )
+    paraphrase.write_csv(out, drafted.rows)
+    cost = cost_usd(drafted.usage, prices)
+    ledger.append(
+        run_dir=out,
+        model=chosen,
+        items=len(drafted.rows),
+        answers=len(drafted.rows),
+        cost=cost,
+        kind="paraphrase",
+    )
+    console.print(
+        f"Wrote {len(drafted.rows)} candidates to {out} for ${cost:.4f}. Mark the approved "
+        "column 'yes' on each row to keep, then run rxdelta evalset paraphrase --approved.",
+        highlight=False,
+    )
+
+
+@evalset_app.command("paraphrase")
+@handle_errors
+def evalset_paraphrase(
+    approved: Annotated[Path, typer.Option("--approved", help="Reviewed candidate CSV.")],
+    set_path: Annotated[Path, typer.Option("--set", help="Eval set the rows come from.")] = Path(
+        "evals/rxdelta_v1.jsonl"
+    ),
+    out: Annotated[Path, typer.Option("--out", help="Paraphrase eval set.")] = Path(
+        "evals/rxdelta_v1_para.jsonl"
+    ),
+) -> None:
+    """Build an eval set from approved paraphrases, keeping the original gold answers."""
+    items = paraphrase.build(set_path, approved, out)
+    console.print(f"Wrote {len(items)} items to {out} with a manifest.", highlight=False)
 
 
 eval_app = typer.Typer(no_args_is_help=True, help="Score a runner against the eval set.")

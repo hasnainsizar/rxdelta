@@ -36,12 +36,26 @@ class Ledger:
     def mean_cost(self, model: str) -> float | None:
         """Cost per answered question in the latest ledger entry for this model."""
         for entry in reversed(self.entries()):
-            if entry.get("model") == model and entry.get("answers"):
+            if (
+                entry.get("kind", "eval") == "eval"
+                and entry.get("model") == model
+                and entry.get("answers")
+            ):
                 return float(entry["cost_usd"]) / int(entry["answers"])
         return None
 
-    def append(self, *, run_dir: Path, model: str, items: int, answers: int, cost: float) -> None:
+    def append(
+        self,
+        *,
+        run_dir: Path,
+        model: str,
+        items: int,
+        answers: int,
+        cost: float,
+        kind: str = "eval",
+    ) -> None:
         entry = {
+            "kind": kind,
             "date": datetime.now(UTC).isoformat(timespec="seconds"),
             "run_dir": str(run_dir),
             "model": model,
