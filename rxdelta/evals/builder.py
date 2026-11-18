@@ -54,13 +54,6 @@ from rxdelta.types import ChangeType, RxdeltaError
 SET_PREFIX = "rxd-v1"
 _STRENGTH = re.compile(r"(\d+(?:\.\d+)?)\s*(MG|MCG|UNT/ML|MG/ML)\b")
 _PARENS = re.compile(r"\s*\([^)]*\)\s*")
-_NO_ANSWER_WEIGHTS = {
-    "no_matching_changes": 0.40,
-    "not_on_formulary": 0.25,
-    "unknown_drug": 0.20,
-    "month_not_loaded": 0.15,
-}
-_ATTEMPTS_PER_ITEM = 200
 
 
 class BuildError(RxdeltaError):
@@ -212,7 +205,8 @@ class Generator:
     def __init__(self, facts: Facts, rng: random.Random) -> None:
         self.f = facts
         self.rng = rng
-        self.id_share = facts.config.evalset.id_share
+        self.settings = facts.config.evalset
+        self.id_share = self.settings.id_share
 
     # Slot helpers
 
@@ -359,7 +353,7 @@ class Generator:
 
     def cost(self, t: Template, *, allow_id: bool = True) -> Candidate | None:
         pair = self.rng.choice(self.f.pairs)
-        if self.rng.random() < 0.8:
+        if self.rng.random() < self.settings.cost_tier_move_share:
             moves = [
                 r
                 for r in self.f.changes[pair]
@@ -464,8 +458,9 @@ class Generator:
         return self.rng.choice(options)
 
     def no_answer(self, _t: Template) -> Candidate | None:
-        kinds = list(_NO_ANSWER_WEIGHTS)
-        kind = self.rng.choices(kinds, weights=[_NO_ANSWER_WEIGHTS[k] for k in kinds])[0]
+        weights = self.settings.no_answer_mix
+        kinds = list(weights)
+        kind = self.rng.choices(kinds, weights=[weights[k] for k in kinds])[0]
         t = self.rng.choice([x for x in TEMPLATES["no_answer"] if x.kind == kind])
         pair = self.rng.choice(self.f.pairs)
         start, end = self.pair_text(pair)
@@ -620,7 +615,7 @@ class Generator:
         if not word.isalpha() or len(word) < 5:
             return None, None
         intended = self.f.resolves(mention)
-        for _ in range(8):
+        for _ in range(self.settings.typo_attempts):
             wrong = _misspell(word, self.rng)
             if normalize_name(wrong) == normalize_name(word):
                 continue
@@ -834,15 +829,16 @@ def build(
         return True
 
     spills: list[Candidate] = []
-    for attempt in range(quotas["typo"] * _ATTEMPTS_PER_ITEM):
+    attempts = config.evalset.attempts_per_item
+    for attempt in range(quotas["typo"] * attempts):
         if len(accepted["typo"]) >= quotas["typo"]:
             break
         typo_item, spill = gen.typo(TYPO_BASES[attempt % len(TYPO_BASES)])
         accept(typo_item)
         if spill is not None:
             spills.append(spill)
-    # Unresolved misspellings fill at most a quarter of the no answer quota.
-    for spill in spills[: quotas["no_answer"] // 4]:
+    # Unresolved misspellings fill only part of the no answer quota.
+    for spill in spills[: int(quotas["no_answer"] * config.evalset.typo_spill_share)]:
         accept(spill)
 
     makers: dict[Category, Callable[[Template], Candidate | None]] = {
@@ -858,7 +854,7 @@ def build(
     }
     for category, make in makers.items():
         templates = TEMPLATES[category]
-        for attempt in range(quotas[category] * _ATTEMPTS_PER_ITEM):
+        for attempt in range(quotas[category] * attempts):
             if len(accepted[category]) >= quotas[category]:
                 break
             accept(make(templates[attempt % len(templates)]))

@@ -236,10 +236,20 @@ class SplitRatios(_Section):
         return self
 
 
+NoAnswerKind = Literal[
+    "no_matching_changes", "not_on_formulary", "unknown_drug", "month_not_loaded"
+]
+
+
 class EvalsetConfig(_Section):
     builder_version: str
     id_share: float = Field(ge=0, le=1)
+    cost_tier_move_share: float = Field(ge=0, le=1)
+    typo_spill_share: float = Field(ge=0, le=1)
+    typo_attempts: int = Field(ge=1)
+    attempts_per_item: int = Field(ge=1)
     mix: dict[Category, float]
+    no_answer_mix: dict[NoAnswerKind, float]
     splits: SplitRatios
     difficulty: DifficultyRules
 
@@ -249,6 +259,7 @@ class EvalsetConfig(_Section):
         missing = set(CATEGORIES) - set(self.mix)
         if missing:
             raise ValueError(f"[evalset.mix] is missing {', '.join(sorted(missing))}")
+        _sums_to_one({str(k): v for k, v in self.no_answer_mix.items()}, "[evalset.no_answer_mix]")
         return self
 
 

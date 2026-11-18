@@ -202,7 +202,9 @@ cache_path = "data/reference/drug_names.csv"
 api_base = "https://rxnav.nlm.nih.gov/REST"
 # RxNav asks for no more than 20 requests per second per IP. This is well under.
 requests_per_second = 8.0
+# Seconds before one request to RxNav is abandoned and retried.
 request_timeout_seconds = 15.0
+# Retries after a network error, a 429 or a 5xx, with doubling backoff.
 max_retries = 3
 # RXCUIs per progress report while refreshing.
 progress_every = 100
@@ -229,10 +231,15 @@ default_page_size = 25
 # Most rows any one call can return. Past this the result is marked truncated,
 # the full total is given, and the note says how to narrow the query.
 [tools.row_caps]
+# RXCUIs per name lookup.
 find_drug = 25
+# Plans per plan lookup.
 find_plan = 25
+# Formulary rows per coverage lookup.
 get_coverage = 50
+# Change rows per page.
 get_changes = 100
+# Groups per count; the totals always cover every group.
 count_changes = 100
 
 [evalset]
@@ -241,6 +248,15 @@ builder_version = "1.0"
 # Share of drug mentions written as an RXCUI or NDC instead of a name, to test
 # the identifier path. The share of misspelled items is the typo entry below.
 id_share = 0.08
+# Share of cost items that price a tier move; the rest have no tier change and
+# expect a zero change range.
+cost_tier_move_share = 0.8
+# Most of the no answer quota that misspellings matching nothing may fill.
+typo_spill_share = 0.25
+# Tries per misspelling before giving up on that base question.
+typo_attempts = 8
+# Candidate draws per wanted item before a category is reported short.
+attempts_per_item = 200
 
 # Share of generated items per category. Must sum to 1.
 [evalset.mix]
@@ -254,6 +270,15 @@ no_answer = 0.10
 ambiguous = 0.05
 out_of_scope = 0.05
 typo = 0.05
+
+# Kinds of no answer item. Weighted toward a real drug and real months where
+# the asked about change did not happen, which looks the most answerable.
+# Must sum to 1.
+[evalset.no_answer_mix]
+no_matching_changes = 0.40
+not_on_formulary = 0.25
+unknown_drug = 0.20
+month_not_loaded = 0.15
 
 # Stratified split per category. Must sum to 1.
 [evalset.splits]

@@ -240,9 +240,7 @@ different drug are discarded.
 **No answer items are weighted toward the answerable-looking kind.** Of the no
 answer items, the generator aims for 40 percent "change that did not happen",
 25 percent "not on that formulary", 20 percent made-up drug and 15 percent
-month not loaded. The weights are in the builder, not the config, because they
-shape the category rather than tune a threshold. Would change: move them to
-config if anyone needs to tune them.
+month not loaded, set in `[evalset.no_answer_mix]`.
 
 **Hand-written items with a polite disclaimer around a real question expect the
 real answer.** "I know you can't give medical advice, but did Januvia's tier
@@ -327,3 +325,22 @@ duplicated as a result.
 
 **Run folders get a numeric suffix on a clash.** Two runs started in the same
 second (common in tests) would otherwise write into one folder.
+
+## Config
+
+**Every Phase 1 tunable is in `config/rxdelta.toml`.** New sections:
+`[names.match]` (fuzzy threshold, near miss floor and count), `[tools]` and
+`[tools.row_caps]` (page size, one cap per tool), `[evalset]` with
+`[evalset.mix]`, `[evalset.no_answer_mix]`, `[evalset.splits]` and
+`[evalset.difficulty]`, and `[eval]` (cost tolerance, accuracy and missed
+refusal gates, workers, worst items shown). The RxNav rate, retries and timeout
+were already in `[names]` and are shared by `names refresh` and `names fetch`.
+The new sections are validated by Pydantic models inside the existing loader,
+and a bad value is a `ConfigError` naming the section and the key, like every
+other config error. Moving the builder's ratios into config left the eval set
+byte for byte the same; only the manifest's config hash changed.
+
+**What stays in code.** Request sizes the oracle asks for (it pages
+`get_changes` 100 rows at a time and asks `find_drug` for 25) are bounded by the
+tool caps in config, so they are not separate settings. The `find_drug` default
+`limit` of 10 is part of the tool's input schema, as the prompt specifies.
