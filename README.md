@@ -424,8 +424,7 @@ now and will be rebuilt once real months are loaded.
 [docs/METHODOLOGY.md](docs/METHODOLOGY.md) explains the cost range, the modal
 case and the severity formula in plain English, with worked examples and the
 verified code tables. [DECISIONS.md](DECISIONS.md) records every judgment call
-and the evidence for it; [docs/decisions.md](docs/decisions.md) does the same for
-the question answering work.
+and the evidence for it, with part 6 covering the question answering work.
 
 ## License
 

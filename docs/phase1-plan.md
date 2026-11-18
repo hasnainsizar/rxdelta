@@ -82,7 +82,7 @@ does not exist, the mapping is:
 | ten change types | the existing `rxdelta.types.ChangeType`, which has twelve: the ten listed plus `quantity_limit_tightened` and `quantity_limit_loosened` |
 | change type names `pa_added` etc. | the existing values `prior_auth_added`, `step_therapy_added`, `quantity_limit_added`, and so on |
 | config file | `config/rxdelta.toml` and `rxdelta/config.py` |
-| decisions log | `docs/decisions.md` for Phase 1, linked from the existing root `DECISIONS.md` |
+| decisions log | part 6 of the root `DECISIONS.md` |
 
 ## What can be answered
 
@@ -164,7 +164,7 @@ tests/fixtures/ask/                 three months plus drug_names.csv
 evals/handwritten.jsonl             20 hand-written items
 evals/rxdelta_v1.jsonl              built eval set
 evals/rxdelta_v1.manifest.json
-docs/decisions.md, docs/eval-card.md, docs/phase2-handoff.md
+DECISIONS.md part 6, docs/eval-card.md, docs/phase2-handoff.md
 tests/test_tools.py, tests/test_names_layer.py, tests/test_evals_*.py, tests/test_grounding.py
 tests/noisy_runner.py               test-only runner that corrupts oracle answers
 ```
