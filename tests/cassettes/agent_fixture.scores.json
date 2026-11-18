@@ -1,0 +1,34 @@
+{
+  "correct": {
+    "rxd-v1-0001": true,
+    "rxd-v1-0021": true,
+    "rxd-v1-0051": false,
+    "rxd-v1-0071": true,
+    "rxd-v1-0101": true,
+    "rxd-v1-0121": true,
+    "rxd-v1-0141": false,
+    "rxd-v1-0161": true,
+    "rxd-v1-0171": true,
+    "rxd-v1-0181": true
+  },
+  "eval_set": "evals/rxdelta_fixture_v1.jsonl",
+  "limit": 10,
+  "settings": {
+    "effort": "medium",
+    "guard_retries": {
+      "consistency": 1,
+      "grounding": 1,
+      "schema": 1
+    },
+    "guards": {
+      "consistency": true,
+      "grounding": true,
+      "schema": true
+    },
+    "max_tokens": 8192,
+    "model": "claude-haiku-5-5",
+    "prompt_version": "v1"
+  },
+  "split": "all",
+  "stratified": true
+}
