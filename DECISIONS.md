@@ -1299,3 +1299,176 @@ it with something else. A test builds a set with `get_changes` capped at 5, wher
 the fixtures do produce over cap questions, and requires the oracle to score 100
 percent on them through the truncated path with every number grounded.
 
+
+## Part 7: the agent
+
+Phase 2 puts a model behind the Phase 1 tools: `rxdelta ask` answers a plain
+English question, and `rxdelta eval run --runner agent` scores the same agent
+against the eval set. Each entry gives the decision, the evidence behind it and
+what would change it.
+
+### Sources
+
+Read on 2026-11-18, before any API code was written:
+
+- Pricing, https://platform.claude.com/docs/en/about-claude/pricing: Claude Haiku
+  5.5 at $0.10 input, $0.125 cache write (5 minute), $0.01 cache read and $0.50
+  output per million tokens for prompts up to 100,000 tokens; Claude Sonnet 5.5
+  at $2.00, $2.50, $0.10 and $10.00. These are in `[agent.models.*]` with the URL
+  and date.
+- Models overview, https://platform.claude.com/docs/en/about-claude/models/overview:
+  current IDs `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`,
+  `claude-fable-5-2`; default effort `medium` on Haiku 5.5 and `high` on Sonnet
+  5.5; adaptive thinking on both.
+- Tool use overview, https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview:
+  parallel tool calls in one assistant message, all results returned in one user
+  message, failed calls returned with `is_error`.
+- Prompt caching, https://platform.claude.com/docs/en/build-with-claude/prompt-caching:
+  render order tools, then system, then messages; at most four breakpoints;
+  minimum cacheable prefix 512 tokens on both models; a 5 minute write costs
+  1.25 times base input.
+- The installed SDK is `anthropic` 2.10.0. Its `messages.create` takes
+  `output_config`, a top level `cache_control` and the model IDs above, which
+  was checked against the installed package rather than memory.
+
+### Models
+
+**Cheapest: `claude-haiku-5-5`. Mid tier: `claude-sonnet-5-5`.** Haiku 5.5 is the
+cheapest current model by a factor of 20 on input; Sonnet 5.5 sits between it
+and Opus 5.5. Would change: a newer Haiku or Sonnet.
+
+**Effort is pinned to `medium` for both.** The two models default to different
+efforts (Haiku `medium`, Sonnet `high`), so leaving the default would mix a model
+change with an effort change in experiment 2. `medium` is also what the docs
+suggest for multistep tool use on Sonnet 5.5. It is one config key,
+`[agent].effort`. Would change: a measured accuracy gain at `high` worth its
+cost.
+
+**Thinking is left on, at the model default, and thinking blocks go back
+unchanged.** Neither model allows turning thinking off with `disabled`. The
+client keeps every content block as a plain dict and sends it back as it came,
+which is what the API needs to keep using earlier thinking.
+
+**No forced `tool_choice`.** Sonnet 5.5 rejects `tool_choice` `any` and `tool`
+with a 400. The loop uses the default `auto`, the system prompt says to finish
+with `submit_answer`, and a plain text stop gets one reminder.
+
+### Client
+
+**Two cache breakpoints plus automatic caching.** One on the system block and
+one on the last tool definition, so the identical 6,572 token prefix (system
+prompt and eight tools, counted with the free `count_tokens` endpoint on both
+models) is written once and read on every later turn and question; the top
+level `cache_control` caches the growing message tail within a question.
+
+**`input_tokens` in `RunnerOutput` counts every prompt token.** The API reports
+uncached input, cache writes and cache reads separately. The output's
+`input_tokens` is their sum, so token counts are comparable whether or not the
+cache hit; the split is in the trace and the summary's cache hit share.
+
+**The cassette key is a hash of the whole request.** Model, system prompt,
+messages, tools, `max_tokens` and effort. Any change to the prompt, a tool
+description or a config value that reaches the request makes replay fail and
+name the missing hash, which is the point: a cassette is only evidence for the
+exact request it recorded. Keys matching `sk-ant-` are scrubbed before writing.
+
+**Haiku's long prompt price is not modelled.** Above 100,000 prompt tokens Haiku
+5.5 costs five times as much. The per question cost cap ends a run long before a
+prompt gets there. Would change: raising the turn or cost limits a lot.
+
+### The loop
+
+**`submit_answer` gets its own schema flattening.** The Phase 1 `_inline` turns
+every `anyOf [X, null]` into `X`, which is right for optional tool filters but
+wrong for `ChangeItem.before` and `after`, which are required and can be null
+(a drug added has no before). The answer schema keeps those nullable, drops the
+discriminator mapping (it holds `$ref`s), writes `oneOf` as `anyOf`, spells each
+`kind` constant as a one value enum, and makes `kind` required in every branch.
+The `ChangeType` docstring was dropped from the schema too: it mentions
+`member_impact`, which the model never sees.
+
+**Guards run schema, then grounding, then consistency, each with its own
+retries.** A failed guard returns an error tool result naming the problem. When
+its retries run out the answer is accepted and the guard is listed in
+`guards_failed`. The schema guard is the exception: with no valid answer there
+is nothing to accept, so the run ends with `error`. A guard turned off still
+records what it would have found, which is how the ablation measures the
+first draft rate with the guards off.
+
+**Every draft is kept, with the number of tool calls made before it.** The
+summary grades the first draft's grounding itself, against only the results the
+model had seen when it wrote it, rather than trusting what the loop recorded.
+
+**Consistency rules are few and cheap.** Empty text; text where the answer talks
+about its own nature; a count whose number is not in the text; a list marked
+truncated with no total, or a text that does not state the total or say the
+list is partial; a clarifying question that does not name every product. Each
+is a rule a person would apply on reading the answer, not a check against gold.
+
+**A shortened tool result keeps `total` and halves its longest list.** Past
+`[agent].max_tool_result_chars` (24,000 characters of JSON, about 7,000 tokens)
+the longest list anywhere in `data` is halved until the JSON fits, `truncated`
+is set and the note says what was cut and how to narrow the query. The full
+result stays in the `ToolCallRecord`.
+
+**`RunnerOutput` gained an optional `trace`, left out of `model_dump`.** The
+scorer and `ask --json` never see it; the harness writes it under `trace` in
+each results line. Phase 1 runners leave it empty.
+
+**The trace stores the final message history, not a copy of every request.**
+Each request resends the whole history, so storing every request would grow as
+the square of the turns. The final history plus per turn stop reasons and usage
+holds every request and response.
+
+### Running evals
+
+**`--stratified` instead of changing `--limit`.** `--limit` takes the first N
+items, which Phase 1 tests rely on. `--stratified` takes them one category at a
+time, so `--limit 40 --stratified` covers every category.
+
+**Repeats are pooled; compare votes.** With `--repeats 3` every summary number
+is over all 3 times N answers (pooled accuracy equals the mean of the repeat
+accuracies), and a `repeats` block adds each repeat's accuracy, min, max, sample
+standard deviation and the right on every, some or no repeat counts. `eval
+compare` calls an item right when it was right on most of its repeats.
+
+**The budget counts real spend, and stops new answers, not answers in flight.**
+The estimate before a run is answers times the mean cost per answer of the
+latest ledger entry for that model, or `estimate_usd_per_question` from config
+when there is none. During a run a shared counter stops new answers once spend
+reaches the budget left; answers already running finish, so a run can pass the
+cap by at most `--workers` answers. Paraphrase drafting is logged with kind
+`paraphrase` and does not count toward the per answer mean.
+
+**Results are appended as answers finish and rewritten in order at the end.** A
+stopped or crashed run keeps every finished answer, and `--resume <dir>` skips
+them. `run.json` records the selection and settings; a resume with different
+flags is refused rather than mixing two configurations in one folder.
+
+**`ask` uses `rxdelta-cms.db` when it exists.** Otherwise the default database.
+The months it reports are those of the last tool call that named months.
+
+### Housekeeping
+
+**Commit messages carry no attribution trailer.** The owner's standing
+instructions forbid AI references in commit messages, which overrides the
+default co-author line.
+
+**The prompt file stays out of git like the Phase 1 one.** `docs/phase2-prompt.md`
+is listed in `.git/info/exclude`.
+
+**The banned words grep became a test.** `tests/test_prose.py` (also `make
+prose-check`) fails on any em or en dash in a tracked text file and on text
+where code or the agent talks about being an AI or about who wrote it. Words
+that describe what the code does (`agent`, `model`, `anthropic`) are allowed. Three files
+that detect dashes and three that name the self talk phrases are allowed to
+contain them.
+
+**The fixture manifest was rebuilt; only its config hash changed.** The manifest
+records a hash of the whole config file, and the new `[agent]` sections changed
+it. The fixture set itself is byte for byte the same, as CI's `cmp` checks.
+
+**Two Phase 1 tests changed.** The runner registry test now expects `agent`
+beside `oracle` and `null`, and the run outputs test expects `run.json`.
+
+**Dependencies: `anthropic` and `python-dotenv` only.**
