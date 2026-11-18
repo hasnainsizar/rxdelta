@@ -89,10 +89,19 @@ Tune on `--split dev`. Run `--split test` only when reporting. Compare runs with
 
 ## Open questions
 
-- **The eval set is built on fixtures.** No real CMS months are loaded in this
-  checkout. Rebuild `evals/rxdelta_v1.jsonl` from real months before quoting
-  scores, and expect the matcher to need tuning on real RxNorm names (thousands
-  of strengths per ingredient, salt names such as "metformin hydrochloride").
+- **Score on the real set, test on the fixture set.** `evals/rxdelta_v1.jsonl`
+  is built from the May, June and July 2026 CMS releases and needs
+  `rxdelta-cms.db`; quote Phase 2 numbers from it. `evals/rxdelta_fixture_v1.jsonl`
+  is what tests and CI run, offline.
+- **The `diff` and `report` commands still work per NDC.** The tools pair an
+  RXCUI's old and new NDC when CMS swaps them, which on real data hides most
+  "removals" and some tier moves from the NDC diff (part 6 of `DECISIONS.md`).
+  An agent answering from the tools and a person reading the HTML report can
+  therefore see different counts for the same month pair.
+- **`find_drug` returns at most 25 RXCUIs.** On real data many ingredients have
+  more forms than that. The eval only asks class and ambiguous questions within
+  the cap; an agent facing a bigger class has to narrow the query (a strength, a
+  form) rather than assume the list is complete. `truncated` says when it is not.
 - **Templated wording.** Questions come from a few dozen templates. Reviewed
   paraphrases, including ones written by people who do not know the domain
   words, should be added before Phase 2 results are trusted.

@@ -291,13 +291,18 @@ the terminal output and the HTML report so the two cannot drift apart.
 
 The real files are **not committed**. Two months unzipped are roughly 14GB, most
 of it the pharmacy networks file, and CMS redistributes them under an agreement
-for use. Download them from the CMS monthly public use files page:
+for use. CMS now publishes them on data.cms.gov as the "Monthly Prescription Drug
+Plan Formulary and Pharmacy Network Information" dataset; the old cms.gov page no
+longer exists. The catalog at <https://data.cms.gov/data.json> lists every
+release's archive URL:
 
-<https://www.cms.gov/data-research/statistics-trends-and-reports/prescription-drug-coverage-general-information/prescription-drug-plan-formulary-pharmacy-network-and-pricing-information-files>
+<https://data.cms.gov/provider-summary-by-type-of-service/medicare-part-d-prescribers/monthly-prescription-drug-plan-formulary-and-pharmacy-network-information>
 
-The two months this project was validated against are the **May 2026 release
-(`2026_20260513`)** and the **June 2026 release (`2026_20260610`)**. Unzip each
-under `data/YYYY-MM/`. The release nests every table in its own directory and the
+The months this project is validated against are the **May 2026 release
+(`2026_20260513`)**, the **June 2026 release (`2026_20260610`)** and the **July
+2026 release (`2026_20260722`)**. Each archive is about 2.3GB, almost all of it
+the pharmacy networks file; rxdelta needs only the three small table archives
+inside it, about 10MB per month. Unzip them under `data/YYYY-MM/`. The release nests every table in its own directory and the
 names contain double spaces; leave them exactly as CMS ships them, the loader
 walks the tree:
 
@@ -312,7 +317,8 @@ geographic locator, indication based coverage and insulin beneficiary cost files
 are ignored, as is the `sample files` directory each release ships.
 
 ```bash
-make cms-load          # load both months
+make cms-load          # load the three months into rxdelta-cms.db
+uv run rxdelta names fetch --db rxdelta-cms.db   # drug names from RxNav, about an hour
 make cms-distribution  # does the score discriminate on real data?
 make cms-example       # regenerate docs/example-report-cms.html
 ```
@@ -349,9 +355,9 @@ answering agent will call these instead of guessing.
 
 ```bash
 uv run rxdelta tools list
-uv run rxdelta tool find_drug --args '{"query": "ozempik"}' --db evals.db --pretty
-uv run rxdelta tool get_changes --db evals.db --pretty \
-    --args '{"from_month": "2026-01", "to_month": "2026-03", "change_types": ["prior_auth_added"]}'
+uv run rxdelta tool find_drug --args '{"query": "ozempik"}' --db rxdelta-cms.db --pretty
+uv run rxdelta tool get_changes --db rxdelta-cms.db --pretty \
+    --args '{"from_month": "2026-05", "to_month": "2026-07", "change_types": ["tier_down"], "formulary_ids": ["00026059"]}'
 uv run rxdelta tools schema --format anthropic   # tool definitions for the agent
 ```
 
@@ -362,19 +368,28 @@ or from a fixture (`rxdelta names load --fixture FILE`). `rxdelta names status`
 shows how many drugs have names. Each drug gets its full name, ingredients and
 brands, so "Ozempic", "semaglutide" and "semiglutide" all find it.
 
-**The eval set.** `evals/rxdelta_v1.jsonl` holds 220 questions with correct
-answers worked out separately from the tools, straight from the tables. It
-covers coverage lookups, changes for one drug, filtered lists, counts, cost,
-multi step questions, questions the data cannot answer, ambiguous drug names,
-medical advice that should be refused, and misspellings. See
-[docs/eval-card.md](docs/eval-card.md) for what it measures and its limits.
+**The eval sets.** Two sets of questions with correct answers worked out
+separately from the tools, straight from the tables. Both cover coverage
+lookups, changes for one drug, filtered lists, counts, cost, multi step
+questions, questions the data cannot answer, ambiguous drug names, medical
+advice that should be refused, and misspellings.
+
+- `evals/rxdelta_v1.jsonl`: 220 questions about the real May, June and July
+  2026 CMS releases. Running it needs the download and `rxdelta-cms.db`.
+- `evals/rxdelta_fixture_v1.jsonl`: 220 questions about the committed synthetic
+  fixtures. Tests and CI use it, because it rebuilds offline.
+
+See [docs/eval-card.md](docs/eval-card.md) for what they measure and their
+limits.
 
 ```bash
-make evalset   # build evals.db from the fixtures, then rebuild the eval set
-uv run rxdelta evalset build --db evals.db --from 2026-01 --to 2026-03 --n 200 --seed 7 \
-    --out evals/rxdelta_v1.jsonl
-uv run rxdelta eval run --runner oracle --split dev --db evals.db
+make cms-load && uv run rxdelta names fetch --db rxdelta-cms.db
+make evalset        # rebuild evals/rxdelta_v1.jsonl from rxdelta-cms.db
+uv run rxdelta eval run --runner oracle --split dev     # real set, rxdelta-cms.db
 uv run rxdelta eval compare runs/<first run> runs/<second run>
+
+make evalset-fixture   # build evals.db from the fixtures and rebuild the fixture set
+uv run rxdelta eval run --set evals/rxdelta_fixture_v1.jsonl --db evals.db --runner oracle
 ```
 
 Each run writes `runs/<time>_<runner>_<split>/` with every answer and score, a
@@ -386,10 +401,10 @@ the data has to be compared against the same yardstick. Building the eval before
 the agent means the first agent run already has a score, and every run after it
 shows exactly what got better and what broke.
 
-Two reference runs on the dev split. The **oracle** knows the correct tool calls
-and must score 100 percent; anything less would mean a bug in the tools, the
-answers or the scoring. The **null** runner always says it found nothing and
-sets the floor.
+Two reference runs on the dev split of the real set. The **oracle** knows the
+correct tool calls and must score 100 percent; anything less would mean a bug in
+the tools, the answers or the scoring. The **null** runner always says it found
+nothing and sets the floor.
 
 Oracle:
 
@@ -400,7 +415,7 @@ Oracle:
 | false refusals | 0 of 130 answerable |
 | missed refusals | 0 of 9 out of scope |
 | required tools called | 100.0% |
-| mean tool calls | 1.63 |
+| mean tool calls | 3.10 |
 | items with ungrounded numbers | 0 |
 
 Null:
@@ -416,8 +431,10 @@ Null:
 | items with ungrounded numbers | 0 |
 
 The null runner's 10.3 percent is the share of questions whose correct answer
-is "the data has no answer". The eval set is built from synthetic fixtures for
-now and will be rebuilt once real months are loaded.
+is "the data has no answer". The oracle did not start at 100 percent on real
+data: the first run scored 96.5 percent, and the causes (NDC swaps hiding tier
+moves, brand names on generic drugs, repeated plan names, unpriced tiers) are
+recorded in part 6 of [DECISIONS.md](DECISIONS.md).
 
 ## More
 

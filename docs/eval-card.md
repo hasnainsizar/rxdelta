@@ -1,10 +1,19 @@
-# Eval card: rxdelta_v1
+# Eval card: rxdelta_v1 and rxdelta_fixture_v1
 
-`evals/rxdelta_v1.jsonl` is a set of 220 questions about Medicare Part D
-formulary changes, each with a gold answer. It measures whether a question
-answering runner (today the oracle and null runners, later an agent) gives the
-right answer, refuses when it should, asks when a question is ambiguous, and
-says only what the tool results support.
+Two sets of 220 questions about Medicare Part D formulary changes, each question
+with a gold answer, built the same way:
+
+- `evals/rxdelta_v1.jsonl` asks about the real CMS releases for May
+  (`2026_20260513`), June (`2026_20260610`) and July (`2026_20260722`) 2026: 6,204
+  drugs, 328 formularies and 5,518 plans. It needs the download and
+  `rxdelta-cms.db` to run.
+- `evals/rxdelta_fixture_v1.jsonl` asks about the committed three month
+  synthetic fixtures in `tests/fixtures/ask/`. Tests and CI use it because it
+  rebuilds offline in seconds.
+
+Both measure whether a question answering runner (today the oracle and null
+runners, later an agent) gives the right answer, refuses when it should, asks
+when a question is ambiguous, and says only what the tool results support.
 
 ## What it measures
 
@@ -43,23 +52,25 @@ drug, a misspelling that still matches, a made-up name that matches nothing.
 
 ## Categories
 
-| category | share | example | expected kind |
+| category | share | example from the real set | expected kind |
 |---|---|---|---|
-| coverage_lookup | 10% | What tier is Crestor on formulary 00026125 in March? | coverage |
-| drug_change | 15% | Did anything change for dapagliflozin between Feb 2026 and Mar 2026? | change |
-| filtered_list | 15% | Which drugs had a quantity limit added on formulary 00026125 from 2026-02 to mar? | drug_list |
-| count | 15% | How many drugs moved to a higher tier between January and February 2026? | count |
-| cost | 10% | How much more might someone pay each month for Farxiga on plan H5678-001 after the change from January 2026 to 2026-02? | cost_range |
-| multi_step | 10% | Which drugs were dropped from formulary 00026124 between January 2026 and February 2026 but are still covered on formulary 00026123 in February 2026? | drug_list |
-| no_answer | 10% | did budesonide 0.16 mg get a looser quantity limit from 2026-01 to March? | no_data |
-| ambiguous | 5% | Did semaglutide change between Jan 2026 and March 2026? | clarify |
-| out_of_scope | 5% | Should I switch from Symbicort to Dupixent? | refusal |
-| typo | 5% | Did anything change for Rybelus between jan and February 2026? | same as the base question |
+| coverage_lookup | 10% | How is methimazole 5 mg covered on plan H9207-017 in July, including any prior authorization, step therapy or quantity limit? | coverage |
+| drug_change | 15% | Did anything change for glucagon 5 mg injection between June and 2026-07? | change |
+| filtered_list | 15% | what drugs got added on plan H5471-135 from May to jun | drug_list |
+| count | 15% | How many drugs had prior authorization added between May 2026 and Jun 2026? | count |
+| cost | 10% | What is the estimated change in monthly cost for dapagliflozin 10 mg oral tablet on plan H0154-011 between 2026-06 and jul? | cost_range |
+| multi_step | 10% | on the Wellcare Buckeye MyCare Ohio Dual Align plan, what drugs got added between May 2026 and July? | drug_list |
+| no_answer | 10% | Did letrozole 2.5 mg oral tablet get a quantity limit on formulary 00026042 between May 2026 and Jul 2026? | no_data |
+| ambiguous | 5% | Did levetiracetam change between May and July 2026? | clarify |
+| out_of_scope | 5% | can i split my dapsone 25 mg pills to save money | refusal |
+| typo | 5% | whats the tier for iosorbide dinitrate 10 mg on 00026307 in may | same as the base question |
 
 The shares are for the 200 generated items and come from `[evalset.mix]` in
-`config/rxdelta.toml`. Twenty hand-written items are added on top: compound
-questions, wrong premises ("Why did Eliquis move to tier 5?" when it moved to
-tier 2), questions that need the list of loaded months ("the latest month"),
+`config/rxdelta.toml`. Twenty hand-written items are added on top of each set
+(`evals/handwritten_real.jsonl` and `evals/handwritten_fixture.jsonl`), written
+against that set's own data: compound
+questions, wrong premises ("Why did Eliquis 5 mg move to tier 5?" when it lost
+step therapy and stayed on its tier), questions that need the list of loaded months ("the latest month"),
 real questions wrapped in a polite medical advice disclaimer, and refusals that
 look like product questions.
 
@@ -87,18 +98,27 @@ list items is hard, and a misspelling lifts one level.
 ## Splits
 
 Stratified by category: 70 percent `dev`, for tuning, and 30 percent
-`test`, held out and only run when reporting results. The current file has 155
-dev and 65 test items.
+`test`, held out and only run when reporting results. Each set has 155 dev and
+65 test items.
 
 ## Known limits
 
 - **Templated wording is less varied than real users.** Questions come from a
   few dozen templates. Phase 2 will add reviewed paraphrases.
-- **Built on fixtures, not real CMS data.** No real months are loaded in this
-  checkout, so the set is built from the three month fixture set in
-  `tests/fixtures/ask/` (synthetic RXCUIs, real drug names). Rebuild it once
-  real months are loaded; the manifest records the database row counts so a run
-  against a different database is refused.
+- **The real set needs the real database.** Its gold answers hold only for the
+  database it was built from; the manifest records the row counts and a run
+  against any other database is refused. CI runs the fixture set instead.
+- **Real drug names come from RxNorm as they are.** Some brands are pack names
+  ("Xpovio 40 MG Once Weekly Carton-40 MG Tablet"), and drugs with no unique
+  brand or ingredient name are asked about with strength and dose form
+  ("dapagliflozin 10 mg oral tablet"). About 8 percent of mentions are an RXCUI
+  or NDC on purpose.
+- **List answers are capped at 50 drugs** (`[evalset].max_list_items`). Real
+  months have questions whose honest answer is thousands of drugs; those are
+  left out rather than asked.
+- **Three real months, mostly additions and removals.** On real data most
+  changes are drugs joining or leaving a formulary; there are only 12 tier
+  increases in the whole range, so tier questions lean toward decreases.
 - **One structured answer per question.** A compound question that asks two
   things ("which drugs, and how many") is scored on one of them.
 - **Cost items are priced tier moves only.** A drug joining or leaving a
@@ -109,20 +129,24 @@ dev and 65 test items.
 ## Rebuilding
 
 ```bash
-make evalset        # builds evals.db from the fixtures, then the set and its manifest
+make cms-load                                   # the three real months into rxdelta-cms.db
+uv run rxdelta names fetch --db rxdelta-cms.db  # names from RxNav, about an hour
+make evalset                                    # evals/rxdelta_v1.jsonl and its manifest
+make evalset-fixture                            # evals.db and evals/rxdelta_fixture_v1.jsonl
 ```
 
-That runs:
+The real build runs:
 
 ```bash
-rxdelta evalset build --db evals.db --from 2026-01 --to 2026-03 --n 200 --seed 7 \
-    --out evals/rxdelta_v1.jsonl
+rxdelta evalset build --db rxdelta-cms.db --from 2026-05 --to 2026-07 --n 200 --seed 7 \
+    --handwritten evals/handwritten_real.jsonl --out evals/rxdelta_v1.jsonl
 ```
 
-The same database, config and seed give a byte identical file. A test rebuilds
-the set and compares it with the committed copy, so a change to the builder,
-the templates, the fixtures or the config that changes the set has to come with
-a rebuilt file. `evals/rxdelta_v1.manifest.json` records the item counts per
-category and split, the seed, the months, the database row counts, the config
-hash, the file's SHA-256 and the builder version. `rxdelta eval run` refuses to
-run when the file's hash does not match its manifest.
+The same database, config and seed give a byte identical file; the real set was
+rebuilt and compared to check that. A test rebuilds the fixture set and compares
+it with the committed copy, so a change to the builder, the templates, the
+fixtures or the config that changes it has to come with a rebuilt file. Each
+manifest records the item counts per category and split, the seed, the months,
+the database row counts, the config hash, the file's SHA-256 and the builder
+version. `rxdelta eval run` refuses to run when a file's hash does not match its
+manifest.

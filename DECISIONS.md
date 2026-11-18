@@ -628,6 +628,11 @@ two styles, so the entries became this part.
 
 ### Data
 
+> Superseded. The May, June and July 2026 releases were later downloaded and
+> loaded, and `evals/rxdelta_v1.jsonl` is now built from them. The fixture set
+> moved to `evals/rxdelta_fixture_v1.jsonl` and is still what tests and CI use.
+> See [What real CMS data changed](#what-real-cms-data-changed) below.
+
 **No months are loaded locally, so everything is built on fixtures.** There is no
 database file in the checkout. Per the brief, no CMS files were downloaded. A
 new three month fixture set in `tests/fixtures/ask/` covers every change type in
@@ -689,6 +694,10 @@ to the database through `httpx`, which the brief allows and which makes the
 transport easy to mock. The two share the token bucket rate limiter and the
 `[names]` rate, retry and timeout settings. Would change: retiring the CSV
 cache, at which point `refresh` can be removed.
+
+> Superseded in part. Brands are no longer read from `related.json?tty=BN`;
+> on real data that attached brand names to 1,956 generic drugs. See
+> [RxNav gives generic drugs brand names](#rxnav-gives-generic-drugs-brand-names).
 
 **RxNav endpoints.** Checked against the RxNav API documentation on 2026-11-17:
 `/REST/rxcui/{rxcui}/properties.json` gives the concept name and returns no
@@ -864,6 +873,10 @@ tier 5?" expects Eliquis's real changes (tier 3 to 2 and prior authorization
 added). When nothing at all happened ("Why was lisinopril removed?") the answer
 is `no_data` with `no_matching_changes`.
 
+> Superseded in naming. This describes the fixture set, now
+> `evals/rxdelta_fixture_v1.jsonl`, built by `make evalset-fixture`. `make
+> evalset` now builds the real set from `rxdelta-cms.db`.
+
 **The committed set is built through the CLI.** `make evalset` builds
 `evals.db` with `rxdelta load` and `rxdelta names load --fixture`. CLI commands
 also load the committed sample name cache, so `evals.db` carries those 648
@@ -908,6 +921,10 @@ both normalize to the same value.
 **The worst items section lists failures first, then ungrounded passes, and
 stops.** When every item is right and grounded the section says so instead of
 showing correct items as "worst".
+
+> Superseded. The defaults are now the real set and its database,
+> `--set evals/rxdelta_v1.jsonl --db rxdelta-cms.db`. CI and the tests pass the
+> fixture set and `evals.db` explicitly.
 
 **`eval run` defaults to `--db evals.db`.** The eval set is built against the
 fixture database that `make evaldb` writes there; the default makes the
@@ -963,6 +980,10 @@ and `astral-sh/setup-uv@v5` became `@v10` (latest releases v7.0.1 and v10.3.3,
 checked against the GitHub releases API on 2026-11-17). Both still take the
 inputs the workflow uses.
 
+> Superseded in naming. CI now rebuilds and gates on the fixture set,
+> `evals/rxdelta_fixture_v1.jsonl`. The real set needs the CMS download, which
+> CI does not have.
+
 **The eval steps rebuild the set and compare bytes, then gate on the oracle.**
 CI builds `evals.db` with `make evaldb`, rebuilds the eval set into the runner's
 temp folder and `cmp`s it and its manifest against the committed copies, so a
@@ -970,3 +991,125 @@ change that alters the set without a rebuilt file fails. Then it runs the oracle
 on every item with `--min-accuracy 1.0 --max-missed-refusal-rate 0`. The whole
 job was run locally on Python 3.11 and 3.12 before committing. No step uses the
 network beyond installing dependencies, and none needs a secret.
+
+### What real CMS data changed
+
+Everything above was first built and passed on the fixtures, with the oracle at
+100 percent. Then the May (`2026_20260513`), June (`2026_20260610`) and July
+(`2026_20260722`) 2026 releases were loaded, names were fetched for all 6,204
+formulary RXCUIs, and the eval set was rebuilt from them. The oracle's first run
+on the real set scored 96.5 percent. Each cause below was found, fixed, tested
+on the fixtures where the fixtures could be made to show it, and the set was
+rebuilt until the oracle reached 100 percent on all 220 items.
+
+#### The CMS download page moved
+
+The page the README linked returns "Page Not Found". The monthly files now live
+on data.cms.gov, and its catalog (`https://data.cms.gov/data.json`) lists every
+release's archive URL. Each archive is about 2.3GB, and 98 percent of that is the
+pharmacy networks file, which rxdelta does not read. The machine had 3.6GB free.
+The server honours HTTP range requests, so only the three needed tables (about
+10MB zipped per month) were read out of each remote archive, by reading the zip
+directory from the end of the file. Raw files sit under `data/`, which stays
+gitignored. Loads matched part 4: 1,123,842 formulary rows in May, no rejected
+rows in any month.
+
+#### The demo name cache put invented names on 12 real drugs
+
+Every CLI command loads `data/reference/drug_names.csv`, the synthetic cache
+behind `make demo`. Its made-up RXCUIs (200010 and up) collide with real ones,
+so before any fetch 12 real formulary drugs already had names like
+"Quetiaprin 25 MG oral solution" (really carvedilol 6.25 MG, RXCUI 200031), and
+`names fetch` skipped them as already named. Names from `rxnav`, `rrf` and
+`fixture` now count as real; anything else is a placeholder that a real source
+replaces and that never replaces a real name. The fetch then reported 6,204
+fetched and 0 already present.
+
+#### RxNav gives generic drugs brand names
+
+`related.json?tty=BN` for a generic clinical drug returns every brand of the same
+ingredient: generic carvedilol came back with "Coreg", generic medroxyprogesterone
+with "Provera". 1,956 of the 4,990 RXCUIs that had brand rows were generics, so
+"Coreg" would have matched the generic and grouped it with the brand. RxNorm
+names a branded concept with its brand in trailing brackets, and that is now the
+only brand source; the fetch asks for `IN` and `MIN` only. The real database was
+repaired by applying the same rule to the stored full names rather than
+refetching for an hour; the result is what a fresh fetch now writes (3,191 brand
+rows, none on a generic).
+
+#### One NDC per RXCUI, swapped every month
+
+In every real month each formulary lists exactly one NDC per RXCUI
+(1,123,842 rows, 1,123,842 distinct formulary and RXCUI pairs), and the NDC that
+stands for a drug changes from month to month. The diff works per NDC, so a swap
+reads as one NDC removed and another added. Between May and June, 24,179 of the
+27,794 removals were swaps: the RXCUI was still on that formulary. At the RXCUI
+grain the tools would have told someone 87 percent of "dropped" drugs were
+dropped when they were not. Worse, the diff never compares the old and new NDC,
+so a coverage change made in the same month as a swap vanished: between June
+and July 300 of the 365 tier decreases and all 12 tier increases happened
+inside swaps.
+
+The tools now pair the swapped out NDC with the swapped in one under the same
+RXCUI and formulary pair and run them through the diff's own `classify`, so
+nothing is reclassified by new code. Gold does the same pairing in its own SQL.
+After the fix gold and the tools agree exactly on all three real month pairs
+(8,561, 19,041 and 26,917 change rows). The fixtures gained two swaps, one with
+identical coverage and one that moves Januvia from tier 3 to 4 while its NDC
+changes, so both cases are tested offline.
+
+The existing `diff` and `report` commands were left as they are, because they
+must not change. They report per NDC and therefore still count swaps as an
+addition plus a removal and still miss coverage changes inside a swap. That is
+now an open question for the report, not just for the question layer.
+
+#### An unpriced tier with no tier move returned no change
+
+Six cost items and one misspelled cost item failed the same way. When a drug's
+tier did not change but the plan publishes no dollar amount for that tier
+(coinsurance with zero bounds, which part 4 found is most coinsurance), the tool
+said in its note that the change was zero and then returned no change range,
+marked unpriced. The brief asks for a zero change range when the tier did not
+move, and gold followed the brief. The tool now returns zero, priced, with the
+before and after amounts left empty. The fixtures always priced every tier the
+generator happened to pick, so this never showed there; a fixture test now
+covers tier 5 on plan S9012-001, which publishes no bounds.
+
+#### Plan names repeat
+
+"Gold Heart & Diabetes" matches 41 plans on three formularies. The builder had
+used it as if it named one plan; the oracle, like any agent, took the first
+match and found nothing. Plan name questions now use only names that pick out
+exactly one plan, matched the way `find_plan` matches.
+
+#### The fixtures had hidden how few real drugs have a plain name
+
+On real data 43 percent of formulary RXCUIs had no brand or ingredient name
+that resolved to them alone, and the builder had quietly fallen back to writing
+the RXCUI, so 35 percent of drug mentions were IDs against a configured 8. It
+now also tries the ingredient or brand with strength and dose form
+("dapagliflozin 10 mg oral tablet"), uses an ID only at the configured share, and
+skips a drug it cannot name. Two more limits came from real sizes: list
+answers reached 3,335 drugs ("which drugs were dropped between May and July"),
+so `[evalset].max_list_items` caps them at 50, and 41 ambiguous names and 50
+drug classes had more drugs than `find_drug` returns (its cap is 25), which no
+agent could list in full, so both now stay within that cap.
+
+#### Scale
+
+On the fixtures everything ran in seconds. On real data the builder's set up
+took 183 seconds, 114 of them in the fuzzy stage of the matcher, reached by
+candidate drug mentions that did not match exactly. Mentions must resolve
+exactly, so their check now skips the fuzzy stage, and the matcher gained exact
+name and token indexes. Gold reclassified a whole month pair on every
+candidate; it now memoizes per database file state, like the tools. A real
+build takes about 80 seconds and an oracle run over all 220 items about two and
+a half minutes.
+
+#### A duplicate question
+
+Rebuilding the fixture set after the swap fixes produced two out of scope items
+with the same text, "what dose of trelegy ellipta should i be taking". That
+template names one drug, but the duplicate check keyed on an unused second
+drug too. The builder now keeps only arguments a template uses and refuses any
+question text it has already produced.
