@@ -19,6 +19,9 @@ It is organised as five parts, not as a diary:
 
 If you are reading one part, read part 4.
 
+Decisions for the question answering work (tool layer, eval set, eval
+harness) are in [docs/decisions.md](docs/decisions.md).
+
 
 ## Part 1: the domain and the data model
 
