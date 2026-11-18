@@ -147,8 +147,8 @@ class Facts:
         self.classes = self._class_tokens()
         self.made_up = [n for n in MADE_UP_DRUGS if not self.matcher.match_all(n)]
 
-    def resolves(self, mention: str) -> set[str]:
-        return {m.rxcui for m in self.matcher.match_all(mention)}
+    def resolves(self, mention: str, *, fuzzy: bool = True) -> set[str]:
+        return {m.rxcui for m in self.matcher.match_all(mention, fuzzy=fuzzy)}
 
     def _name_mentions(self, rxcui: str) -> list[str]:
         rows = self.conn.execute(
@@ -163,7 +163,8 @@ class Facts:
         candidates = brands + ingredients
         if suffix:
             candidates += [b + suffix for b in brands] + [i + suffix for i in ingredients]
-        return [c for c in dict.fromkeys(candidates) if self.resolves(c) == {rxcui}]
+        # A mention must resolve exactly, never by resemblance to another name.
+        return [c for c in dict.fromkeys(candidates) if self.resolves(c, fuzzy=False) == {rxcui}]
 
     def _ambiguous_names(self) -> list[tuple[str, list[str]]]:
         rows = self.conn.execute(
@@ -172,7 +173,7 @@ class Facts:
         ).fetchall()
         found = []
         for (name,) in rows:
-            matched = self.resolves(str(name))
+            matched = self.resolves(str(name), fuzzy=False)
             by_sql = set(gold.rxcuis_named(self.conn, normalize_name(str(name))))
             if len(matched) > 1 and matched == by_sql:
                 found.append((str(name), sorted(matched)))
@@ -193,7 +194,11 @@ class Facts:
         for token in tokens:
             members = gold.rxcuis_with_token(self.conn, token)
             products = {gold.product_of(self.conn, r) for r in members}
-            if len(members) >= 3 and len(products) >= 3 and self.resolves(token) == set(members):
+            if (
+                len(members) >= 3
+                and len(products) >= 3
+                and self.resolves(token, fuzzy=False) == set(members)
+            ):
                 found.append((token, members))
         return found
 

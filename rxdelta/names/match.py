@@ -91,9 +91,14 @@ class DrugMatcher:
                 return " / ".join(found)
         return self.display_name(rxcui)
 
-    def match_all(self, query: str) -> list[DrugMatch]:
-        """Every match from the first stage that finds any, best first."""
-        for stage in (self._by_id, self._exact, self._token, self._fuzzy):
+    def match_all(self, query: str, *, fuzzy: bool = True) -> list[DrugMatch]:
+        """Every match from the first stage that finds any, best first.
+
+        `fuzzy=False` stops after the token stage, for callers that need a name
+        to resolve exactly rather than by resemblance.
+        """
+        stages = [self._by_id, self._exact, self._token] + ([self._fuzzy] if fuzzy else [])
+        for stage in stages:
             found = stage(query)
             if found:
                 return _sorted(found)
