@@ -144,24 +144,31 @@ rxdelta/names/match.py              match_drug and product grouping
 rxdelta/tools/envelope.py           ToolResult, ToolError, Provenance
 rxdelta/tools/context.py            read-only connection, tool context
 rxdelta/tools/changes_core.py       change rows built from diff_snapshots
+rxdelta/tools/common.py             argument types and shared lookups
 rxdelta/tools/list_months.py ... estimate_cost_change.py   one module per tool
 rxdelta/tools/registry.py           specs, call_tool, schema export
 rxdelta/ask/answer.py               AnswerKind, payload models, RunnerOutput, Runner
+rxdelta/ask/values.py               canonical before and after strings
 rxdelta/evals/gold.py               independent SQL for gold answers
 rxdelta/evals/templates.py          question templates as data
+rxdelta/evals/items.py              eval item format, reading and writing
 rxdelta/evals/builder.py            evalset build, splits, manifest
 rxdelta/evals/score.py              per-item scoring
 rxdelta/evals/grounding.py          number grounding check
 rxdelta/evals/runners.py            oracle and null runners, runner registry
 rxdelta/evals/harness.py            eval run, outputs, compare
-rxdelta/evals/templates/eval_report.html.j2
+rxdelta/evals/report.py             summary.md and report.html
+rxdelta/report/templates/eval_report.html.j2
 scripts/build_ask_fixtures.py       writes tests/fixtures/ask/
 tests/fixtures/ask/                 three months plus drug_names.csv
 evals/handwritten.jsonl             20 hand-written items
 evals/rxdelta_v1.jsonl              built eval set
 evals/rxdelta_v1.manifest.json
 docs/decisions.md, docs/eval-card.md, docs/phase2-handoff.md
-tests/test_tools_*.py, tests/test_names_*.py, tests/test_evals_*.py
+tests/test_tools.py, tests/test_names_layer.py, tests/test_evals_*.py, tests/test_grounding.py
+tests/noisy_runner.py               test-only runner that corrupts oracle answers
 ```
 
 Runs go to `runs/`, which is gitignored.
+
+The layout above was updated at the end of Phase 1 to match what was built.

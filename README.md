@@ -331,12 +331,101 @@ Tests run against small hand built fixture tables in `tests/fixtures/`, which
 follow the real CMS column layout. CI runs lint, typecheck, tests and the full
 synthetic demo on every push.
 
+## Asking questions (in progress)
+
+The goal is `rxdelta ask "did Ozempic get more expensive on my plan?"`: a plain
+English question in, an answer out, built only from the loaded data. That
+command does not exist yet. What exists is the groundwork it will stand on.
+
+rxdelta reports formulary data. It does not give medical advice.
+
+**Tools.** Seven small, read-only functions that look things up in the
+database: which months are loaded, find a drug by name (misspellings included),
+find a plan, show how a drug is covered, list or count changes between two
+months, and estimate what a tier move does to monthly cost. Each takes typed
+arguments, never writes to the database, and always says why when it finds
+nothing ("that month is not loaded", "no changes of that kind"). The question
+answering agent will call these instead of guessing.
+
+```bash
+uv run rxdelta tools list
+uv run rxdelta tool find_drug --args '{"query": "ozempik"}' --db evals.db --pretty
+uv run rxdelta tool get_changes --db evals.db --pretty \
+    --args '{"from_month": "2026-01", "to_month": "2026-03", "change_types": ["prior_auth_added"]}'
+uv run rxdelta tools schema --format anthropic   # tool definitions for the agent
+```
+
+**Drug names.** The CMS files identify drugs by code, so names come from NLM
+RxNav (`rxdelta names fetch`, the only command besides `names refresh` that uses
+the network), from a local RxNorm file (`rxdelta names load --rrf RXNCONSO.RRF`),
+or from a fixture (`rxdelta names load --fixture FILE`). `rxdelta names status`
+shows how many drugs have names. Each drug gets its full name, ingredients and
+brands, so "Ozempic", "semaglutide" and "semiglutide" all find it.
+
+**The eval set.** `evals/rxdelta_v1.jsonl` holds 220 questions with correct
+answers worked out separately from the tools, straight from the tables. It
+covers coverage lookups, changes for one drug, filtered lists, counts, cost,
+multi step questions, questions the data cannot answer, ambiguous drug names,
+medical advice that should be refused, and misspellings. See
+[docs/eval-card.md](docs/eval-card.md) for what it measures and its limits.
+
+```bash
+make evalset   # build evals.db from the fixtures, then rebuild the eval set
+uv run rxdelta evalset build --db evals.db --from 2026-01 --to 2026-03 --n 200 --seed 7 \
+    --out evals/rxdelta_v1.jsonl
+uv run rxdelta eval run --runner oracle --split dev --db evals.db
+uv run rxdelta eval compare runs/<first run> runs/<second run>
+```
+
+Each run writes `runs/<time>_<runner>_<split>/` with every answer and score, a
+summary, an HTML report and a markdown table.
+
+**Why the eval came first.** An agent that answers health plan questions has to
+be measured before it is trusted, and every later change to a prompt, a tool or
+a model has to be compared against the same yardstick. Building the eval before
+the agent means the first agent run already has a score, and every run after it
+shows exactly what got better and what broke.
+
+Two reference runs on the dev split. The **oracle** knows the correct tool calls
+and must score 100 percent; anything less would mean a bug in the tools, the
+answers or the scoring. The **null** runner always says it found nothing and
+sets the floor.
+
+Oracle:
+
+| metric | value |
+|---|---|
+| accuracy | 100.0% (155 of 155) |
+| mean F1, drug lists | 100.0% |
+| false refusals | 0 of 130 answerable |
+| missed refusals | 0 of 9 out of scope |
+| required tools called | 100.0% |
+| mean tool calls | 1.63 |
+| items with ungrounded numbers | 0 |
+
+Null:
+
+| metric | value |
+|---|---|
+| accuracy | 10.3% (16 of 155) |
+| mean F1, drug lists | n/a |
+| false refusals | 130 of 130 answerable |
+| missed refusals | 9 of 9 out of scope |
+| required tools called | 5.8% |
+| mean tool calls | 0.00 |
+| items with ungrounded numbers | 0 |
+
+The null runner's 10.3 percent is the share of questions whose correct answer
+is "the data has no answer". The eval set is built from synthetic fixtures for
+now and will be rebuilt once real months are loaded.
+
 ## More
 
 [docs/METHODOLOGY.md](docs/METHODOLOGY.md) explains the cost range, the modal
 case and the severity formula in plain English, with worked examples and the
 verified code tables. [DECISIONS.md](DECISIONS.md) records every judgment call
-and the evidence for it.
+and the evidence for it; [docs/decisions.md](docs/decisions.md) does the same for
+the question answering work.
 
 ## License
 
