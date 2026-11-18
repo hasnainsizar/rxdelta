@@ -197,6 +197,7 @@ def summarize(
         "by_category": by_category,
         "kind_confusion": dict(confusion),
         "clarify_paths": dict(Counter(s.clarify_path for s in scores if s.clarify_path)),
+        "over_cap_paths": dict(Counter(s.over_cap_path for s in scores if s.over_cap_path)),
         "tools": {
             "required_called_rate": _rate(sum(s.required_tools_called for s in scores), total),
             "items_missing_required": sum(1 for s in scores if not s.required_tools_called),

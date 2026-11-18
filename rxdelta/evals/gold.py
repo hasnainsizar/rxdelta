@@ -482,6 +482,18 @@ def count_drugs(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAns
     return CountAnswer(count=len({r.rxcui for r in rows}), unit="drugs")
 
 
+def over_cap(conn: sqlite3.Connection, args: dict[str, Any]) -> tuple[CountAnswer, DrugListAnswer]:
+    """A list too long for one tool call: the drug count, and the full list,
+    which also counts as correct if a runner pages through all of it."""
+    found = sorted({r.rxcui for r in filtered_changes(conn, args)})
+    if not found:
+        raise GoldError("over_cap needs a non-empty answer")
+    full = DrugListAnswer(
+        rxcuis=found, display_names=full_names(conn, found), total=len(found), truncated=False
+    )
+    return CountAnswer(count=len(found), unit="drugs"), full
+
+
 def class_changes(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
     """Drugs whose names contain a word (a drug class like 'insulin') that changed."""
     month_from, month_to = _pair(conn, args)
@@ -668,6 +680,8 @@ def evaluate(conn: sqlite3.Connection, config: Config, query: str, args: dict[st
         return filtered_list(conn, args)
     if query == "count_drugs":
         return count_drugs(conn, args)
+    if query == "over_cap":
+        return over_cap(conn, args)
     if query == "cost_change":
         return cost_change(conn, config, args)
     if query == "class_changes":

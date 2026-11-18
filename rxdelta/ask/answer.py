@@ -46,6 +46,9 @@ class DrugListAnswer(_Payload):
     display_names: list[str] = Field(default_factory=list)
     # Secondary check for questions that also ask "what tier is each on now".
     tiers: dict[str, int] | None = None
+    # A list cut short by a tool's row cap says so, and says how many there are.
+    total: int | None = Field(default=None, ge=0)
+    truncated: bool = False
 
 
 class CountAnswer(_Payload):

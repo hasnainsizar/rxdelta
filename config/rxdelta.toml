@@ -279,8 +279,10 @@ max_list_items = 50
 [evalset.mix]
 coverage_lookup = 0.10
 drug_change = 0.15
-filtered_list = 0.15
+filtered_list = 0.10
 count = 0.15
+# List questions whose answer is longer than get_changes returns in one call.
+over_cap = 0.05
 cost = 0.10
 multi_step = 0.10
 no_answer = 0.10

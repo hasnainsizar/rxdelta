@@ -286,6 +286,32 @@ class OracleRunner:
         rows = s.change_rows(**filters)
         return _drug_list(rows)
 
+    def _over_cap(self, s: _Session, args: dict[str, Any]) -> tuple[StructuredAnswer, str]:
+        """More rows than one call returns: list the first page, mark it
+        truncated, and take the total number of drugs from count_changes."""
+        start, end, filters = self._list_filters(s, args)
+        first = s.call("get_changes", limit=self._ctx.config.tools.cap("get_changes"), **filters)
+        data = s.need(first, NoDataReason.no_matching_changes)
+        s.stop_if_empty(not data.rows, first, NoDataReason.no_matching_changes)
+        if not first.truncated:
+            return _drug_list(data.rows)
+        counted = s.call("count_changes", group_by="change_type", **filters)
+        drugs = s.need(counted, NoDataReason.no_matching_changes).totals.drugs
+        names = {r.rxcui: r.display_name for r in data.rows}
+        shown = sorted(names)
+        answer = DrugListAnswer(
+            rxcuis=shown,
+            display_names=[names[r] for r in shown],
+            total=drugs,
+            truncated=True,
+        )
+        text = (
+            f"{drugs} drugs match between {start} and {end}, more than one page of results. "
+            "The first page lists: " + "; ".join(names[r] for r in shown) + ". Name a "
+            "formulary or a narrower change for the complete list."
+        )
+        return answer, text
+
     def _count_drugs(self, s: _Session, args: dict[str, Any]) -> tuple[StructuredAnswer, str]:
         start, end, filters = self._list_filters(s, args)
         result = s.call("count_changes", group_by="change_type", **filters)

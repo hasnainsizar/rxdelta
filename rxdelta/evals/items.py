@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from rxdelta.ask.answer import ChangeAnswer, QuestionContext, StructuredAnswer
+from rxdelta.ask.answer import QuestionContext, StructuredAnswer
 from rxdelta.config import Category
 
 Difficulty = Literal["easy", "medium", "hard"]
@@ -37,9 +37,9 @@ class EvalItem(BaseModel):
     question: str
     context: QuestionContext = Field(default_factory=QuestionContext)
     expected: StructuredAnswer
-    # For ambiguous items: the full answer for every candidate, which also counts
-    # as correct when the runner answers instead of asking.
-    alternative: ChangeAnswer | None = None
+    # Another answer that also counts as correct: for ambiguous items the full
+    # answer for every candidate, for over_cap items the complete drug list.
+    alternative: StructuredAnswer | None = None
     required_tools: list[str]
     gold_query: str
     gold: GoldSpec

@@ -296,8 +296,12 @@ def test_committed_eval_set_matches_a_fresh_build(
 def test_category_mix_and_splits(built: list[EvalItem], config: Config) -> None:
     generated = Counter(i.category for i in built if i.source == "generated")
     quotas = builder._quotas(config, 200)
-    assert dict(generated) == {c: q for c, q in quotas.items() if q}
-    assert sum(generated.values()) == 200
+    # The fixtures hold no list longer than one get_changes call at the real cap,
+    # so over_cap is the one category they cannot fill; the manifest says so.
+    assert dict(generated) == {c: q for c, q in quotas.items() if q and c != "over_cap"}
+    assert "over_cap" not in generated
+    manifest = json.loads(manifest_path(EVAL_SET).read_text())
+    assert manifest["shortfalls"] == {"over_cap": quotas["over_cap"]}
     for category in CATEGORIES:
         members = [i for i in built if i.category == category]
         dev = sum(1 for i in members if i.split == "dev")
@@ -320,7 +324,7 @@ def test_no_near_duplicates(built: list[EvalItem]) -> None:
 
 def test_every_category_uses_at_least_four_templates(built: list[EvalItem]) -> None:
     for category in CATEGORIES:
-        if category == "typo":
+        if category in ("typo", "over_cap"):
             continue
         templates = {
             i.template_id for i in built if i.category == category and i.source == "generated"
@@ -460,7 +464,8 @@ def test_evalset_cli(eval_db: Path, tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    assert len(read_items(out)) == 60
+    shortfall = json.loads(manifest_path(out).read_text())["shortfalls"]
+    assert len(read_items(out)) == 40 + 20 - sum(shortfall.values())
     assert manifest_path(out).is_file()
 
 
@@ -491,3 +496,41 @@ def test_release_ids_are_recorded_only_when_the_files_match_the_load(
     edited.write_text(edited.read_text() + "\n", encoding="utf-8")
     with pytest.raises(builder.BuildError, match="hash the load recorded"):
         builder.loaded_releases(ro, data, ["2026-02"])
+
+
+def test_over_cap_items_appear_when_answers_outgrow_the_tool_cap(
+    ask_db: Path, config: Config, tmp_path: Path
+) -> None:
+    """With get_changes capped at 5 rows, the fixtures hold over_cap questions.
+    The oracle answers them through the truncated flag and count_changes."""
+    from dataclasses import replace
+
+    from rxdelta.evals import harness
+
+    tools = config.tools.model_copy(
+        update={"row_caps": {**config.tools.row_caps, "get_changes": 5}}
+    )
+    small = replace(config, tools=tools)
+    out = tmp_path / "small.jsonl"
+    items = build(ask_db, out, small)
+    over = [i for i in items if i.category == "over_cap"]
+    assert len(over) == builder._quotas(small, 200)["over_cap"]
+    assert len({i.template_id for i in over}) >= 4
+    for item in over:
+        assert isinstance(item.expected, CountAnswer)
+        assert isinstance(item.alternative, DrugListAnswer)
+        assert item.expected.count == len(item.alternative.rxcuis)
+        assert len(gold.filtered_changes(open_ro(ask_db), item.gold.args)) > 5
+
+    result = harness.run(
+        set_path=out,
+        runner_name="oracle",
+        split="all",
+        db_path=ask_db,
+        config=small,
+        out_root=tmp_path / "runs",
+        category="over_cap",
+    )
+    assert result.summary["overall"]["accuracy"] == 1.0
+    assert result.summary["over_cap_paths"] == {"truncated_list": len(over)}
+    assert result.summary["grounding"]["items_with_ungrounded"] == 0

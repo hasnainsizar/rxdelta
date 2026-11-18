@@ -201,6 +201,7 @@ Category = Literal[
     "drug_change",
     "filtered_list",
     "count",
+    "over_cap",
     "cost",
     "multi_step",
     "no_answer",

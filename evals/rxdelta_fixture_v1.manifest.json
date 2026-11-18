@@ -1,12 +1,12 @@
 {
   "eval_set": "rxdelta_fixture_v1",
   "file": "rxdelta_fixture_v1.jsonl",
-  "file_sha256": "3114a4b4ac8e020b98cf07d63343e331e8c666fe70165d43b51eee507e0021d2",
+  "file_sha256": "d8678858b7f38a8f1250144f015d386d2d18cb7acfb87e00f66d353f494fa126",
   "builder_version": "1.0",
   "seed": 7,
   "n_generated": 200,
   "n_handwritten": 20,
-  "items": 220,
+  "items": 210,
   "months": [
     "2026-01",
     "2026-02",
@@ -29,14 +29,19 @@
       "total": 34
     },
     "filtered_list": {
-      "dev": 23,
-      "test": 10,
-      "total": 33
+      "dev": 16,
+      "test": 7,
+      "total": 23
     },
     "count": {
       "dev": 22,
       "test": 9,
       "total": 31
+    },
+    "over_cap": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
     },
     "cost": {
       "dev": 15,
@@ -70,10 +75,12 @@
     }
   },
   "splits": {
-    "dev": 155,
-    "test": 65
+    "dev": 148,
+    "test": 62
   },
-  "shortfalls": {},
+  "shortfalls": {
+    "over_cap": 10
+  },
   "db_row_counts": {
     "formulary": 404,
     "plan_info": 16,
@@ -81,5 +88,5 @@
     "drug_names": 829,
     "ingest_log": 9
   },
-  "config_sha256": "524ab663791ef0e1c4c057215a98c15a21dc2f7924c0b5f9a467c17842a65d95"
+  "config_sha256": "9a79e450bcd1a15c1da26e2848ba521d75f84eb8cfb3a93546cf82b137ca4e82"
 }

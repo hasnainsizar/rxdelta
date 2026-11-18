@@ -201,6 +201,29 @@ TEMPLATES: dict[str, tuple[Template, ...]] = {
             "plan",
         ),
     ),
+    "over_cap": (
+        Template(
+            "over_cap.formal.1", "List every drug that {change} between {from} and {to}.", "formal"
+        ),
+        Template(
+            "over_cap.formal.2",
+            "Which drugs {change} on formulary {formulary} from {from} to {to}? I need the "
+            "complete list.",
+            "formal",
+            "formulary",
+        ),
+        Template(
+            "over_cap.casual.1",
+            "what are all the drugs that {change_casual} from {from} to {to}",
+            "casual",
+        ),
+        Template(
+            "over_cap.casual.2",
+            "show me every drug that {change_casual} on {formulary} between {from} and {to}",
+            "casual",
+            "formulary",
+        ),
+    ),
     "cost": (
         Template(
             "cost.formal.1",

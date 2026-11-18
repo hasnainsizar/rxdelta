@@ -23,6 +23,7 @@ from rxdelta.evals import grounding
 from rxdelta.evals.items import EvalItem
 
 ClarifyPath = Literal["asked", "answered_all", "missed"]
+OverCapPath = Literal["count", "truncated_list", "full_list", "missed"]
 _NOT_ANSWERS = ("no_data", "refusal")
 
 
@@ -37,6 +38,7 @@ class ItemScore(BaseModel):
     reason_match: bool | None = None
     secondary_match: bool | None = None
     clarify_path: ClarifyPath | None = None
+    over_cap_path: OverCapPath | None = None
     answerable: bool
     false_refusal: bool
     missed_refusal: bool
@@ -95,15 +97,38 @@ def _clarify(item: EvalItem, got: StructuredAnswer, text: str) -> tuple[bool, Cl
     wanted = expected.rxcuis()
     if isinstance(got, ClarifyAnswer):
         return wanted <= got.rxcuis(), "asked" if wanted <= got.rxcuis() else "missed"
-    if isinstance(got, ChangeAnswer) and item.alternative is not None:
-        covered = wanted <= set(got.rxcuis) and _items(got) == _items(item.alternative)
+    alternative = item.alternative
+    if isinstance(got, ChangeAnswer) and isinstance(alternative, ChangeAnswer):
+        covered = wanted <= set(got.rxcuis) and _items(got) == _items(alternative)
         if covered and _mentions_every_product(text, expected):
             return True, "answered_all"
-    if isinstance(got, DrugListAnswer) and item.alternative is not None:
-        changed = {i.rxcui for i in item.alternative.items}
+    if isinstance(got, DrugListAnswer) and isinstance(alternative, ChangeAnswer):
+        changed = {i.rxcui for i in alternative.items}
         if set(got.rxcuis) == changed and _mentions_every_product(text, expected):
             return True, "answered_all"
     return False, "missed"
+
+
+def _over_cap(item: EvalItem, got: StructuredAnswer) -> OverCapPath:
+    """A list too long for one tool call. Right answers: the count, a partial
+    list that says it is partial and states the right total, or the full list."""
+    expected = item.expected
+    full = item.alternative
+    assert isinstance(expected, CountAnswer) and isinstance(full, DrugListAnswer)
+    if isinstance(got, CountAnswer):
+        return "count" if got.count == expected.count and got.unit == "drugs" else "missed"
+    if not isinstance(got, DrugListAnswer):
+        return "missed"
+    if set(got.rxcuis) == set(full.rxcuis):
+        return "full_list"
+    if (
+        got.truncated
+        and got.total == expected.count
+        and got.rxcuis
+        and set(got.rxcuis) <= set(full.rxcuis)
+    ):
+        return "truncated_list"
+    return "missed"
 
 
 def _correct(
@@ -114,6 +139,10 @@ def _correct(
         ok, path = _clarify(item, got, text)
         score["clarify_path"] = path
         return ok
+    if item.category == "over_cap":
+        over_cap_path = _over_cap(item, got)
+        score["over_cap_path"] = over_cap_path
+        return over_cap_path != "missed"
     if got.kind != expected.kind:
         return False
     if isinstance(expected, DrugListAnswer):

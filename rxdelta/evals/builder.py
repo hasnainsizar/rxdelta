@@ -20,6 +20,7 @@ from typing import Any
 from rxdelta.ask.answer import (
     ChangeAnswer,
     ClarifyAnswer,
+    CountAnswer,
     DrugListAnswer,
     NoDataAnswer,
     QuestionContext,
@@ -375,6 +376,19 @@ class Generator:
             return None
         args, slots = built
         return self.candidate("filtered_list", t, slots, "filtered_list", args)
+
+    def over_cap(self, t: Template) -> Candidate | None:
+        """A list question whose answer has more change rows than get_changes
+        returns in one call, so it can only be answered with a count or a list
+        that says it is partial."""
+        pair = self.rng.choice(self.f.pairs)
+        built = self._list_args(t, pair, self.rng.choice(self.f.changes[pair]))
+        if built is None:
+            return None
+        args, slots = built
+        if len(gold.filtered_changes(self.f.conn, args)) <= self.f.config.tools.cap("get_changes"):
+            return None
+        return self.candidate("over_cap", t, slots, "over_cap", args)
 
     def count(self, t: Template) -> Candidate | None:
         pair = self.rng.choice(self.f.pairs)
@@ -745,6 +759,7 @@ def required_tools(query: str, args: dict[str, Any]) -> list[str]:
         "drug_change": ["get_changes"],
         "filtered_list": ["get_changes"],
         "count_drugs": ["count_changes"],
+        "over_cap": ["count_changes"],
         "cost_change": ["estimate_cost_change"],
         "class_changes": ["get_changes"] + (["get_coverage"] if args.get("with_tiers") else []),
         "changes_where_coverage": ["get_changes", "get_coverage"],
@@ -796,6 +811,8 @@ def _wanted(category: Category, answer: Any, tags: list[str], max_list: int) -> 
         return isinstance(answer, NoDataAnswer) and answer.reason.value in tags
     if category == "out_of_scope":
         return bool(answer.kind == "refusal")
+    if category == "over_cap":
+        return isinstance(answer, tuple) and isinstance(answer[0], CountAnswer)
     if category in ("filtered_list", "multi_step"):
         return isinstance(answer, DrugListAnswer) and len(answer.rxcuis) <= max_list
     return not isinstance(answer, NoDataAnswer)
@@ -886,6 +903,7 @@ def build(
         "drug_change": gen.drug_change,
         "filtered_list": gen.filtered_list,
         "count": gen.count,
+        "over_cap": gen.over_cap,
         "cost": gen.cost,
         "multi_step": gen.multi_step,
         "no_answer": gen.no_answer,
