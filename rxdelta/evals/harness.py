@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from rxdelta.agent.budget import Ledger, SpendGuard
+from rxdelta.agent.loop import ACCOUNT_ERROR, API_ERROR
 from rxdelta.ask.answer import NoDataAnswer, NoDataReason, Runner, RunnerOutput
 from rxdelta.config import CATEGORIES, Config
 from rxdelta.evals import report
@@ -308,10 +309,27 @@ def _read_records(path: Path) -> dict[tuple[str, int], dict[str, Any]]:
     return records
 
 
+def _says_nothing_about_the_runner(record: dict[str, Any]) -> bool:
+    """An answer the API never let the runner give; a resume asks again."""
+    error = record["output"].get("error") or ""
+    return error.startswith((API_ERROR, ACCOUNT_ERROR))
+
+
 def _restore(record: dict[str, Any]) -> tuple[RunnerOutput, ItemScore]:
     output = RunnerOutput.model_validate(record["output"])
     output.trace = record.get("trace")
     return output, ItemScore.model_validate(record["score"])
+
+
+def _stop_note(stopped: bool, account: list[str], kept: int, wanted: int) -> str | None:
+    if not stopped:
+        return None
+    if account:
+        return (
+            f"the API refused the account ({account[0][:160]}): {kept} of {wanted} answers "
+            "finished; fix the account and rerun with --resume"
+        )
+    return f"budget reached: {kept} of {wanted} answers finished"
 
 
 def planned_answers(
@@ -326,6 +344,7 @@ def planned_answers(
     """Answers a run will ask for, less those a resumed run already has."""
     chosen = select(read_items(set_path), split, category, limit, stratified)
     done = _read_records(resume / "results.jsonl") if resume is not None else {}
+    done = {k: v for k, v in done.items() if not _says_nothing_about_the_runner(v)}
     wanted = {(i.id, r) for r in range(1, repeats + 1) for i in chosen}
     return len(wanted - set(done))
 
@@ -392,16 +411,27 @@ def run(
         spec_file.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
     results_file = directory / "results.jsonl"
     done = _read_records(results_file)
+    if opts.resume is not None:
+        done = {k: v for k, v in done.items() if not _says_nothing_about_the_runner(v)}
+        results_file.write_text(
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in done.values()),
+            encoding="utf-8",
+        )
     pairs = [(item, r) for r in range(1, opts.repeats + 1) for item in chosen]
     todo = [(item, r) for item, r in pairs if (item.id, r) not in done]
     guard = SpendGuard(opts.budget_cap) if opts.budget_cap is not None else None
     lock = threading.Lock()
 
+    account_failure: list[str] = []
+
     def work(pair: tuple[EvalItem, int]) -> dict[str, Any] | None:
         item, repeat = pair
-        if guard is not None and guard.exhausted:
+        if account_failure or (guard is not None and guard.exhausted):
             return None
         output = _answer(runner, item)
+        if (output.error or "").startswith(ACCOUNT_ERROR):
+            account_failure.append(output.error or "")
+            return None
         if guard is not None:
             guard.add(output.cost_usd)
         record = _record(item, repeat, output, score_item(item, output, config))
@@ -457,9 +487,7 @@ def run(
         "duration_s": round(time.perf_counter() - clock, 3),
         "settings": opts.settings,
         "repeats": repeat_summary([i.id for i in items], [r for _, r in kept], scores),
-        "stopped_early": (
-            f"budget reached: {len(kept)} of {len(pairs)} answers finished" if stopped else None
-        ),
+        "stopped_early": _stop_note(stopped, account_failure, len(kept), len(pairs)),
         "run_cost_usd": round(sum(o.cost_usd for o in outputs), 6),
         "this_session_cost_usd": round(new_cost, 6),
         **summarize(items, scores, config, gates),

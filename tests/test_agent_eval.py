@@ -246,3 +246,64 @@ def test_stratified_limit_spreads_over_categories(config: Config) -> None:
     assert len({i.category for i in chosen}) == 10
     plain = harness.select(items, "all", None, 10)
     assert len({i.category for i in plain}) == 1
+
+
+class BrokeClient:
+    """Answers once, then the account has no credit."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def create(self, request: ModelRequest) -> ModelResponse:
+        from rxdelta.agent.client import ModelError
+
+        self.calls += 1
+        if self.calls > 1:
+            raise ModelError(
+                "BadRequestError", "HTTP 400: Your credit balance is too low", account=True
+            )
+        return turn(submit(RIGHT, "See a pharmacist."))
+
+
+def test_an_account_error_stops_the_run_and_resume_finishes_it(
+    eval_db: Path, config: Config, tmp_path: Path
+) -> None:
+    broke = BrokeClient()
+    stopped = _run(eval_db, config, tmp_path, broke)
+    assert broke.calls == 2
+    assert stopped.summary["overall"]["items"] == 1
+    assert "refused the account" in stopped.summary["stopped_early"]
+
+    resumed = _run(
+        eval_db,
+        config,
+        tmp_path,
+        PatternClient([[True]] * 3),
+        options=harness.RunOptions(resume=stopped.directory),
+    )
+    assert resumed.summary["overall"]["items"] == 3
+    assert resumed.summary["overall"]["accuracy"] == 1.0
+
+
+def test_resume_asks_again_where_the_api_failed(
+    eval_db: Path, config: Config, tmp_path: Path
+) -> None:
+    from rxdelta.agent.client import ModelError
+
+    class Flaky(PatternClient):
+        def create(self, request: ModelRequest) -> ModelResponse:
+            if "ProAir" in str(request.messages[0]["content"]):
+                raise ModelError("InternalServerError", "HTTP 500")
+            return super().create(request)
+
+    first = _run(eval_db, config, tmp_path, Flaky([[True]] * 3))
+    assert first.summary["overall"]["errors"] >= 1
+    resumed = _run(
+        eval_db,
+        config,
+        tmp_path,
+        PatternClient([[True]] * 3),
+        options=harness.RunOptions(resume=first.directory),
+    )
+    assert resumed.summary["overall"]["errors"] == 0
+    assert len((first.directory / "results.jsonl").read_text().splitlines()) == 3

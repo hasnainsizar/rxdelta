@@ -25,9 +25,12 @@ from rxdelta.types import RxdeltaError
 class ModelError(RxdeltaError):
     """The model API could not answer, after the SDK's own retries."""
 
-    def __init__(self, kind: str, message: str) -> None:
+    def __init__(self, kind: str, message: str, *, account: bool = False) -> None:
         super().__init__(f"{kind}: {message}")
         self.kind = kind
+        # The account cannot make any request (no credit, bad key, no access), so
+        # every later request would fail the same way.
+        self.account = account
 
 
 class Usage(BaseModel):
@@ -128,7 +131,10 @@ class AnthropicClient:
                 **({"tools": _cached_tools(request.tools)} if request.tools else {}),
             )
         except errors.APIStatusError as exc:
-            raise ModelError(type(exc).__name__, f"HTTP {exc.status_code}: {exc.message}") from exc
+            account = exc.status_code in (401, 403) or "credit balance" in str(exc.message)
+            raise ModelError(
+                type(exc).__name__, f"HTTP {exc.status_code}: {exc.message}", account=account
+            ) from exc
         except errors.APIConnectionError as exc:
             raise ModelError(type(exc).__name__, str(exc)) from exc
         usage = message.usage

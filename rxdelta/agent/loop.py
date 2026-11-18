@@ -37,6 +37,8 @@ REMINDER = (
     "answer and final_text."
 )
 Event = Callable[[str, dict[str, Any]], None]
+API_ERROR = "api error"
+ACCOUNT_ERROR = "account error"
 
 
 @dataclass(frozen=True)
@@ -228,7 +230,8 @@ class AgentRunner:
             try:
                 response = self._client.create(request)
             except ModelError as exc:
-                raise _StopError(f"api error {exc.kind}: {exc}") from exc
+                prefix = ACCOUNT_ERROR if exc.account else API_ERROR
+                raise _StopError(f"{prefix} {exc}") from exc
             run.usage = run.usage + response.usage
             run.cost += cost_usd(response.usage, s.prices)
             run.turns.append(
