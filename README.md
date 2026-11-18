@@ -376,13 +376,149 @@ Tests run against small hand built fixture tables in `tests/fixtures/`, which
 follow the real CMS column layout. CI runs lint, typecheck, tests and the full
 synthetic demo on every push.
 
-## Asking questions (in progress)
+## Asking questions
 
-The goal is `rxdelta ask "did Ozempic get more expensive on my plan?"`: a plain
-English question in, an answer out, built only from the loaded data. That
-command does not exist yet. What exists is the groundwork it will stand on.
+`rxdelta ask` answers a plain English question about the loaded CMS months. A
+model (Claude Haiku 5.5 by default) reads the question, calls the read-only
+tools below to look the facts up, and answers through a structured
+`submit_answer` call. Before an answer is accepted it is checked: it must fit
+the answer schema, every number in it must appear in a tool result, and the
+text must agree with the structured answer (a count must say the count, a
+partial list must say it is partial). A check that fails goes back to the model
+once to fix.
 
-rxdelta reports formulary data. It does not give medical advice.
+rxdelta reports formulary data. It does not give medical advice, and every
+answer ends by saying so.
+
+```bash
+echo "ANTHROPIC_API_KEY=<your key>" > .env        # .env is git-ignored
+uv run rxdelta ask "Did Jardiance 10 mg change between June and July 2026?"
+uv run rxdelta ask --show-tools --model claude-sonnet-5-5 "..."   # print each tool call
+uv run rxdelta ask --json "..."                   # the structured answer, for scripts
+```
+
+It uses `rxdelta-cms.db` when that file exists, otherwise `rxdelta.db`, and says
+which. Three real runs on the May to July 2026 data:
+
+```
+$ rxdelta ask --show-tools "How many drugs moved to a lower tier between June and July 2026?"
+Using rxdelta-cms.db
+count_changes {"change_types": ["tier_down"], "from_month": "2026-06", "group_by": "change_type", 
+"to_month": "2026-07"}
+  -> ok, total 1
+23 drugs moved to a lower tier between June 2026 and July 2026. This covered 474 changes across 157 formularies and 2,671 plans. A lower tier number does not automatically mean a lower cost to the member; the cost direction depends on the plan.
+months 2026-06 to 2026-07, claude-haiku-5-5, 1 tool calls, 14,417 in and 546 out tokens, $0.0005, 11.4s
+This reports CMS formulary data. It is not medical advice.
+```
+
+```
+$ rxdelta ask --show-tools "Did Jardiance 10 mg change between June and July 2026?"
+Using rxdelta-cms.db
+find_drug {"query": "Jardiance"}
+  -> ok, total 2, 'Jardiance' is one product with 2 RXCUIs (different strengths or forms). Ask which
+one is meant, or answer for each.
+get_changes {"from_month": "2026-06", "rxcuis": ["1545664"], "to_month": "2026-07"}
+  -> ok, total 1
+Yes. Jardiance 10 mg (empagliflozin 10 mg, RXCUI 1545664) was removed from formulary 00026395 between June 2026 and July 2026. Before the change it was tier 3; after it is no longer on the formulary. This affects 6 plans: H3204-001-000, H3204-007-000, H3204-013-004, H3204-013-005, H3204-013-006 and H3204-017-000.
+months 2026-06 to 2026-07, claude-haiku-5-5, 2 tool calls, 22,255 in and 522 out tokens, $0.0006, 11.4s
+This reports CMS formulary data. It is not medical advice.
+```
+
+```
+$ rxdelta ask --show-tools "Will Nurtec cost more on formulary 00026043 after the July 2026 update?"
+Using rxdelta-cms.db
+find_drug {"query": "Nurtec"}
+  -> ok, total 1
+list_months {}
+  -> ok, total 3
+get_coverage {"formulary_id": "00026043", "month": "2026-06", "rxcui": "2282320"}
+  -> ok, total 1
+get_coverage {"formulary_id": "00026043", "month": "2026-07", "rxcui": "2282320"}
+  -> ok, total 1
+estimate_cost_change {"formulary_id": "00026043", "from_month": "2026-06", "rxcui": "2282320", 
+"to_month": "2026-07"}
+  -> ok, Not priced: the plan does not publish dollar cost sharing for this tier, for example 
+coinsurance with no dollar bounds.
+No, it should cost less. For formulary 00026043, Nurtec (rimegepant 75 mg) moved from tier 4 in June 2026 to tier 2 in July 2026, a tier decrease. Prior authorization and the quantity limit (16 tablets per 30 days) stayed the same. The data does not give a dollar figure for this move because the cost file has no published dollar amounts for these tiers, so the exact change in your cost is not known. Actual cost also depends on deductible status and other factors not in these files.
+months 2026-06 to 2026-07, claude-haiku-5-5, 5 tool calls, 32,186 in and 876 out tokens, $0.0010, 14.3s
+This reports CMS formulary data. It is not medical advice.
+```
+
+The third answer is wrong in a way the eval was built to catch: it reads "tier 4
+to tier 2" as "costs less", which is exactly what the cost rule tells it not to
+do, instead of reading the change's `cost_direction`. It happens to be the
+likely direction (on these months no tier decrease was found to cost more, see
+part 4 of [DECISIONS.md](DECISIONS.md)), but the answer states it as fact.
+
+### Results
+
+Scored on the real set (220 questions about the May, June and July 2026
+releases): tuned on the dev split (155 questions), reported once on the
+held-out test split (65 questions). Each run asks every question 1 or 3 times;
+model answers vary, so repeated runs give the spread.
+
+| | dev, baseline | dev, v1 | dev, final | dev, final | **test, final** |
+|---|---|---|---|---|---|
+| model | Haiku 5.5 | Sonnet 5.5 | Sonnet 5.5 | Haiku 5.5 | **Haiku 5.5** |
+| system prompt | v1 | v1 | v2 | v2 | **v2** |
+| repeats | 3 | 1 | 1 | 3 | **3** |
+| accuracy (mean) | 82.6% | 76.8% | 94.2% | 96.1% | **96.9%** |
+| accuracy, lowest and highest repeat | 81.9% to 83.2% | | | 96.1% to 96.1% | **96.9% to 96.9%** |
+| questions right on every repeat | 120 of 155 | | | 148 of 155 | **61 of 65** |
+| answers with a number no tool returned | 0% | 0% | 0% | 0% | **0%** |
+| first drafts with such a number | 5.0% | 4.5% | 3.9% | 7.7% | **7.7%** |
+| missed refusals of medical advice | 1 of 27 | 0 of 9 | 0 of 9 | 0 of 27 | **0 of 12** |
+| cost per question | $0.0023 | $0.026 | $0.028 | $0.0024 | **$0.0022** |
+| cost per correct answer | $0.0027 | $0.034 | $0.030 | $0.0025 | **$0.0023** |
+| median time per question | 12.9 s | | | 11.1 s | **10.5 s** |
+
+What the columns show:
+
+- **The prompt mattered more than the model.** With the first prompt, Sonnet 5.5
+  scored below Haiku 5.5 at eleven times the cost. Most failures under both
+  were the same few habits (below), and a second prompt that addresses them as
+  general rules took Haiku from 82.6 to 96.1 percent on dev, with no question
+  going from right to wrong. The final dev run also raised the per answer output
+  limit from 8,192 to 32,000 tokens, after the new prompt made the model write
+  answers with several hundred rows that the old limit cut off.
+- **The checks catch made up numbers; they do not raise accuracy.** With every
+  check turned off (Haiku, v1, dev, 1 repeat) accuracy was 81.3 percent, inside
+  the baseline's spread, but 3.2 percent of final answers stated a number no
+  tool returned. With the checks on, 5 to 8 percent of first drafts did, and
+  every one was sent back and fixed.
+- **Cost.** The final setup answers a question for about a fifth of a cent. All
+  the runs in this phase, including the ones above, a smoke test, the guard
+  ablation, the paraphrase drafts and the README examples, cost $17.15.
+
+### Where it fails
+
+On the test split it got 6 of 195 answers wrong, on 4 questions:
+
+- **Asking when it did not need to** (3 answers, one question). Asked about
+  "brivaracetam 50 mg oral tablet", the generic, it looked up only
+  "brivaracetam", saw a brand and a generic, and asked which one was meant. The
+  second prompt's rule for names shared by several products caused this: it
+  fixed the ambiguous questions and overreached on this one.
+- **Summarizing instead of finishing** (1 answer). Asked whether a drug changed
+  when it left many formularies, it gave the count instead of every change. On
+  dev, three questions with 300 or more rows still fail this way on most
+  repeats, because the second prompt allows a count past 300 rows and the eval
+  wants every row.
+- **The wrong kind of answer** (1 answer). A "which drugs" question answered with
+  a list of changes rather than a list of drugs: right facts, wrong shape.
+- **Ambiguous drug names** (1 answer). A name covering several products,
+  answered for the ones that changed instead of all of them or a question back.
+
+Under the first prompt the same three habits (summarizing, wrong kind,
+ambiguous names) caused almost every miss on dev; the second prompt cut them
+from 81 wrong answers in 465 to 18. The error analysis in
+[docs/error-analysis-v1.md](docs/error-analysis-v1.md) has two examples of each.
+It also still reaches for tier numbers when the cost data is missing, as in the
+Nurtec example above. The questions come from a few dozen templates, so these
+scores say how it handles the kinds of question in the set, not everything a
+person might type; reviewed casual paraphrases are the next check.
+
+### The groundwork
 
 **Tools.** Seven small, read-only functions that look things up in the
 database: which months are loaded, find a drug by name (misspellings included),

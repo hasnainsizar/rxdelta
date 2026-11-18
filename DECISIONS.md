@@ -1472,3 +1472,156 @@ it. The fixture set itself is byte for byte the same, as CI's `cmp` checks.
 beside `oracle` and `null`, and the run outputs test expects `run.json`.
 
 **Dependencies: `anthropic` and `python-dotenv` only.**
+
+### Budget and limits
+
+**Budget $50, per question cap $0.50.** Set by the owner at the first stop,
+after an estimate of about $65 for the full plan if Sonnet won. The measured
+costs came in well under the estimate ($0.0023 per Haiku answer against
+$0.006 assumed, $0.026 per Sonnet answer against $0.05), so Sonnet was run with
+1 repeat, Haiku with 3, and the whole phase cost $17.15.
+
+**The smoke test changed two limits before any full run.** A 40 question
+stratified Haiku run on real dev (`runs/20261118T200224Z_agent_dev`, 77.5
+percent, $0.13) showed two harness problems, fixed before runs 1 and 2:
+
+- 24 tool calls was too few for the task. The oracle needs up to 95 calls on
+  real dev (one `get_coverage` per drug), so some questions were unanswerable
+  by design. The limits became 100 tool calls and 40 turns; the cost cap still
+  bounds spend.
+- `submit_answer` did not say what the coverage fields mean, and Haiku put 0 in
+  `quantity_limit_amount` and `days` where the tool returns null (2 of 9
+  failures). The description now says to leave them out when there is no
+  quantity limit, and the consistency guard checks it.
+
+**The API account ran out of credit mid run.** After $4.45, every request
+failed with "credit balance is too low": 291 of run 1's 465 answers and 4 of run
+2's. Two changes followed. An account level error (no credit, a bad key, no
+access) now stops a run at once instead of failing every remaining question,
+and `--resume` asks again for every answer that ended in an API or account
+error, since those say nothing about the agent. After credit was added, both
+runs were finished in place with `--resume`; no answer was paid for twice.
+
+**`max_tokens` went from 8,192 to 32,000 after the first v2 dev run, with
+streaming.** v2 tells the model to give every row, and for a drug that left 328
+formularies the `change` answer is about 15,000 tokens of JSON. At 8,192 the
+response was cut off, the truncated `submit_answer` failed the schema, and 13 of
+465 Haiku answers ended in errors (`runs/20261118T205442Z_agent_dev`, 93.5
+percent). The client now streams (the SDK refuses large non streaming
+requests), a call cut off at the limit is sent back with a plain "you were cut
+off, send it again" instead of a schema error, and both v2 dev runs were done
+again. The first v2 runs stay in `runs/` and in the ledger. This was a dev
+change, made before the test split was run.
+
+**`rxdelta ask` does not write to the spend ledger.** The ledger is for scored
+runs and paraphrase drafts. The three README examples cost $0.0021.
+
+### Experiments
+
+All on the real set, dev split (155 questions) unless noted. Folders are under
+`runs/`, which is git ignored; the numbers are copied here and in the README.
+
+| # | run | folder | accuracy | cost |
+|---|---|---|---|---|
+| | smoke: Haiku, v1, 40 stratified | `20261118T200224Z_agent_dev` | 77.5% | $0.13 |
+| 1 | Haiku, v1, guards on, 3 repeats | `20261118T200744Z_agent_dev-2` | 82.6% (81.9 to 83.2) | $1.05 |
+| 2 | Sonnet, v1, guards on, 1 repeat | `20261118T200744Z_agent_dev` | 76.8% | $4.09 |
+| 3 | Haiku, v1, guards off, 1 repeat | `20261118T205257Z_agent_dev` | 81.3% | $0.31 |
+| 5 | Haiku, v2, 3 repeats, 8,192 tokens | `20261118T205442Z_agent_dev` | 93.5% (92.9 to 94.2) | $1.12 |
+| 5 | Sonnet, v2, 1 repeat, 8,192 tokens | `20261118T205446Z_agent_dev` | 94.2% | $4.53 |
+| 5 | Haiku, v2, 3 repeats, 32,000 tokens | `20261118T213117Z_agent_dev-2` | 96.1% (96.1 to 96.1) | $1.10 |
+| 5 | Sonnet, v2, 1 repeat, 32,000 tokens | `20261118T213117Z_agent_dev` | 94.2% | $4.34 |
+| 6 | **Haiku, v2, guards on, test split, 3 repeats** | `20261118T215940Z_agent_test` | **96.9% (96.9 to 96.9)** | $0.43 |
+
+Two cassette recordings of 10 fixture questions cost $0.014, the 40 paraphrase
+drafts $0.0012.
+
+**Haiku 5.5 is the better model on this set.** It beat Sonnet 5.5 under v1 (82.6
+against 76.8 percent) and matched it under v2 (96.1 against 94.2 percent, inside
+one Sonnet repeat's noise) at about a twelfth of the cost per correct answer.
+Sonnet's v1 misses were the same habits as Haiku's, applied more consistently:
+it gave the wrong answer kind on 16 items against Haiku's 10, mostly `change` for "which drugs".
+Would change: a question mix with more open ended reasoning, where a stronger
+model might pull ahead.
+
+**v2 was also run on Sonnet.** The plan called for v2 on the better model only.
+With Haiku the better model, that run and "v2 on Haiku" are the same, so v2 was
+also run on Sonnet (1 repeat, about $4.50 each time) to answer the question the
+extra run was asked for: whether the prompt closes the gap between models. It
+does; under v2 the two are within a point or two.
+
+**What the guards are worth.** With all three off (run 3), accuracy was 81.3
+percent, inside run 1's spread, so the guards do not buy accuracy. They buy
+clean answers: 3.2 percent of final answers stated a number no tool returned
+and 2 ended with a schema error. With them on, 5 to 8 percent of first drafts
+had an ungrounded number, every one was retried, and every retry fixed it (23
+of 23 in run 1, 15 of 15 on test).
+
+**The final configuration is Haiku 5.5, v2, guards on, 32,000 tokens.** It is now
+the config default (`prompt_version = "v2"`). The test split was run once, with
+it, after all dev work. Two things seen afterwards were not acted on: v2's
+clarify rule asks about a product the question already names
+(`rxd-v1-0044`, all three test repeats), and the grounding check reads
+numbered list markers ("1.", "2.") as claimed numbers, which made the guard
+send back one correct draft (the retry dropped the numbering and passed).
+Both are for a v3 and a grounding fix, judged on dev.
+
+**Repeats agree more than expected.** The final runs scored the same accuracy
+on all three repeats (96.1, 96.1, 96.1 on dev; 96.9 on test), yet 2 dev and 3
+test questions were right on only some repeats: the misses moved between
+questions without changing the total. One repeat is not enough to know which
+questions are stable.
+
+### Error analysis and gold
+
+`docs/error-analysis-v1.md` sorts every failure of runs 1 and 2 into one
+category. The three largest, by items across both runs: misread `truncated`
+(15 and 13), wrong answer kind (10 and 16), ambiguity handled wrong (6 and 6).
+
+**No gold errors were found**, so the second stop did not apply. Items that
+looked suspicious were checked against what the tools return for the question
+as worded: "did X change" items whose answer is every one of 300 removal rows,
+and "Eliquis 5 mg" covering both the tablet and the starter pack, which the
+name matcher returns for that name. One scoring quirk is recorded instead of a
+gold error: the generic product of `rxd-v1-0171` is labelled "metformin /
+metformin / sitagliptin / sitagliptin", so naming every product in the text
+needs that exact string. Asking (`clarify`) is unaffected.
+
+**Questions with many tool calls.** Two dev questions needed more than 24 calls
+in every run (29 to 33, nearly all `get_coverage`), all answered right, at 2.4
+(Haiku) to 3.5 (Sonnet) times the mean cost. A batch coverage tool would cut
+them to about 4 calls; it is in `docs/phase3-ideas.md`. The tools were not
+changed during the runs.
+
+### Paraphrases
+
+`rxdelta evalset paraphrase-draft` wrote one casual paraphrase for each of 40
+dev items, four or so per category, with Haiku 5.5 at low effort, to
+`evals/paraphrase_candidates.csv` with an empty `approved` column. Several
+drafts are unchanged copies of the original and at least one changes the
+meaning ("formulary 00026338" became "plan 00026338"); `rxdelta evalset
+paraphrase --approved` refuses an unchanged or repeated paraphrase, and the
+rest is for the owner's review. Approved rows become
+`evals/rxdelta_v1_para.jsonl` with the original gold answers and a manifest
+that carries the source set's database row counts, so `eval run` checks the
+database the same way.
+
+### The real eval manifest
+
+**Rebuilt for the config hash only.** Like the fixture manifest, the real set's
+manifest records a hash of the whole config file. `make evalset` was run again
+at the end of the phase; `evals/rxdelta_v1.jsonl` came out byte for byte the
+same and only `config_sha256` changed in the manifest.
+
+### What I would do differently
+
+- Measure one real question per model before estimating cost. The estimate was
+  two to three times too high because it assumed more output per turn than the
+  models write at medium effort.
+- Check the account's credit before a run that size, and make account errors
+  fatal from the start rather than after a run lost 291 answers to one.
+- Write the answer kind rules into the `submit_answer` description in the
+  first version. The largest single class of v1 failures was right facts in
+  the wrong shape, which says the interface, not the model, was unclear.
+- Size `max_tokens` from the largest answer the eval expects (a few hundred
+  change rows) instead of from a typical one.

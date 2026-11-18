@@ -149,3 +149,31 @@ Likely cause: the factual premise pulls the answer kind toward the data.
 
 Covered in `docs/phase3-ideas.md` under "A batch coverage tool": two dev
 questions needed more than 24 calls, all of them answered right.
+
+## What v2 did
+
+`rxdelta eval compare runs/20261118T200744Z_agent_dev-2
+runs/20261118T213117Z_agent_dev-2` (Haiku 5.5, 3 repeats each; the second run
+also raised `max_tokens` from 8,192 to 32,000, see part 7 of `DECISIONS.md`):
+accuracy 82.6 to 96.1 percent, 19 items wrong to right, none right to wrong.
+Wrong answers fell from 81 to 18 of 465.
+
+| category | v1 wrong answers | v2 wrong answers |
+|---|---|---|
+| misread `truncated` | 38 | 9 (`0034`, `0045`, `0046`: 307 to 328 rows, past the prompt's 300 row line) |
+| wrong answer kind | 18 | 2 (`h10` asked instead of listing) |
+| ambiguity handled wrong | 17 | 3 (`0173` on every repeat) |
+| drug name resolution | 3 | 3 (`h02` on every repeat) |
+| bad arguments | 4 | 0 |
+| answered a medical advice question | 1 | 0 |
+
+One answer of `0035` failed the schema twice and ended with an error.
+
+**A new failure from v2.** On the test split, `rxd-v1-0044` ("any changes to
+brivaracetam 50 mg oral tablet on 00026109 ...") failed on all three repeats:
+the model looked up only "brivaracetam", saw the generic and Briviact, and asked
+which was meant, although the question names the generic tablet. The rule for
+names shared by several products says to ask only when the question does not
+pick one by brand, strength or form; the model does not check the form against
+its own shortened lookup. `h10` on dev is the same habit. This was seen after
+the test run and is left for a v3.
