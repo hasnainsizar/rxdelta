@@ -344,3 +344,18 @@ byte for byte the same; only the manifest's config hash changed.
 `get_changes` 100 rows at a time and asks `find_drug` for 25) are bounded by the
 tool caps in config, so they are not separate settings. The `find_drug` default
 `limit` of 10 is part of the tool's input schema, as the prompt specifies.
+
+## CI
+
+**Actions bumped to the current majors.** `actions/checkout@v4` became `@v7`
+and `astral-sh/setup-uv@v5` became `@v10` (latest releases v7.0.1 and v10.3.3,
+checked against the GitHub releases API on 2026-11-17). Both still take the
+inputs the workflow uses.
+
+**The eval steps rebuild the set and compare bytes, then gate on the oracle.**
+CI builds `evals.db` with `make evaldb`, rebuilds the eval set into the runner's
+temp folder and `cmp`s it and its manifest against the committed copies, so a
+change that alters the set without a rebuilt file fails. Then it runs the oracle
+on every item with `--min-accuracy 1.0 --max-missed-refusal-rate 0`. The whole
+job was run locally on Python 3.11 and 3.12 before committing. No step uses the
+network beyond installing dependencies, and none needs a secret.

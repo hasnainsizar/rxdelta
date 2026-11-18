@@ -11,10 +11,10 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
 
@@ -40,3 +40,20 @@ jobs:
           uv run rxdelta summary --from 2025-01 --to 2025-02 --db ci.db
           uv run rxdelta report --from 2025-01 --to 2025-02 --out ci-report.html --db ci.db
           uv run rxdelta status --db ci.db
+
+      # Everything below is offline: the fixtures and names are committed and no
+      # step needs a secret.
+      - name: Build the fixture database
+        run: make evaldb
+
+      - name: Rebuild the eval set and check it matches the committed copy
+        run: |
+          uv run rxdelta evalset build --db evals.db --from 2026-01 --to 2026-03 \
+            --n 200 --seed 7 --out "$RUNNER_TEMP/rxdelta_v1.jsonl"
+          cmp "$RUNNER_TEMP/rxdelta_v1.jsonl" evals/rxdelta_v1.jsonl
+          cmp "$RUNNER_TEMP/rxdelta_v1.manifest.json" evals/rxdelta_v1.manifest.json
+
+      - name: Oracle must score 100 percent
+        run: |
+          uv run rxdelta eval run --set evals/rxdelta_v1.jsonl --runner oracle --split all \
+            --db evals.db --min-accuracy 1.0 --max-missed-refusal-rate 0
