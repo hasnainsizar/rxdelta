@@ -356,3 +356,31 @@ def test_names_fetch_cli_with_nothing_loaded_makes_no_requests(tmp_path: Path) -
     result = runner.invoke(app, ["names", "fetch", "--db", str(tmp_path / "e.db")])
     assert result.exit_code == 0, result.output
     assert "No RXCUIs found" in result.output
+
+
+def test_fetch_replaces_a_placeholder_name_and_the_cache_never_restores_it(
+    tmp_path: Path, config: Config
+) -> None:
+    """On real data the synthetic demo cache named 12 real RXCUIs with invented
+    drugs. A real name must replace the placeholder and stay replaced."""
+    from rxdelta.names.cache import DrugName, merge_into_db
+
+    conn = _db_with_rxcuis(tmp_path, ["8800141"])
+    placeholder = {
+        "8800141": DrugName("8800141", "Valcyclor 40 MG oral solution", "synthetic", "t")
+    }
+    merge_into_db(conn, placeholder)
+
+    summary = fetch.fetch(conn, _client(config, _transport([])))
+    assert summary.fetched == 1 and summary.already_present == 0
+
+    merge_into_db(conn, placeholder)
+    names = {
+        (r[0], r[1])
+        for r in conn.execute("SELECT name_type, source FROM drug_names WHERE rxcui = '8800141'")
+    }
+    assert names == {("full", "rxnav"), ("ingredient", "rxnav"), ("brand", "rxnav")}
+    full = conn.execute(
+        "SELECT name FROM drug_names WHERE rxcui = '8800141' AND name_type = 'full'"
+    ).fetchone()[0]
+    assert full == "apixaban 5 MG Oral Tablet [Eliquis]"

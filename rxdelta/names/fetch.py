@@ -30,7 +30,7 @@ from rxdelta.names.store import (
     formulary_rxcuis,
     log_missing,
     missing_rxcuis,
-    named_rxcuis,
+    really_named_rxcuis,
     upsert,
 )
 
@@ -154,13 +154,16 @@ def fetch(
     progress_every: int = 0,
     on_progress: Callable[[FetchSummary, int], None] | None = None,
 ) -> FetchSummary:
-    """Fetch every formulary RXCUI with no stored name and no logged miss.
+    """Fetch every formulary RXCUI with no real name and no logged miss.
+
+    A placeholder name, such as one from the synthetic demo cache, does not
+    count as named: on real data its RXCUI can belong to a different drug.
 
     Each RXCUI is written as soon as it resolves, so stopping part way loses
     nothing and a rerun picks up where the last one stopped.
     """
     wanted = formulary_rxcuis(conn)
-    done = named_rxcuis(conn) | missing_rxcuis(conn)
+    done = really_named_rxcuis(conn) | missing_rxcuis(conn)
     todo = [r for r in wanted if r not in done]
     summary = FetchSummary(in_scope=len(wanted), already_present=len(wanted) - len(todo))
     for index, rxcui in enumerate(todo, start=1):

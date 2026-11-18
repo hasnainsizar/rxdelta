@@ -11,6 +11,9 @@ from rxdelta.names.normalize import bracket_brand, normalize_name
 
 NameType = Literal["full", "ingredient", "brand"]
 NAME_TYPES: tuple[NameType, ...] = ("full", "ingredient", "brand")
+# Sources that name real concepts. Anything else, such as the synthetic demo
+# cache, is a placeholder: a real source replaces it and it never replaces one.
+REAL_SOURCES = frozenset({"rxnav", "rrf", "fixture"})
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,14 @@ def upsert(conn: sqlite3.Connection, rows: Iterable[NameRow]) -> int:
     if not batch:
         return 0
     with conn:
+        real = sorted({r.rxcui for r in batch if r.source in REAL_SOURCES})
+        for start in range(0, len(real), 500):
+            chunk = real[start : start + 500]
+            conn.execute(
+                f"DELETE FROM drug_names WHERE rxcui IN ({','.join('?' for _ in chunk)}) "  # noqa: S608
+                f"AND source NOT IN ({','.join('?' for _ in REAL_SOURCES)})",
+                [*chunk, *sorted(REAL_SOURCES)],
+            )
         for row in batch:
             if row.name_type == "full":
                 conn.execute(
@@ -93,6 +104,16 @@ def formulary_rxcuis(conn: sqlite3.Connection) -> list[str]:
 
 def named_rxcuis(conn: sqlite3.Connection) -> set[str]:
     return {str(r[0]) for r in conn.execute("SELECT DISTINCT rxcui FROM drug_names").fetchall()}
+
+
+def really_named_rxcuis(conn: sqlite3.Connection) -> set[str]:
+    """RXCUIs with a name from a real source, not only a placeholder."""
+    rows = conn.execute(
+        f"SELECT DISTINCT rxcui FROM drug_names WHERE source IN "  # noqa: S608
+        f"({','.join('?' for _ in REAL_SOURCES)})",
+        sorted(REAL_SOURCES),
+    ).fetchall()
+    return {str(r[0]) for r in rows}
 
 
 def missing_rxcuis(conn: sqlite3.Connection) -> set[str]:

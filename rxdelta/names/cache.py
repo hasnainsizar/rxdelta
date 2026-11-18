@@ -11,7 +11,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from rxdelta.names.store import rows_from_full_name, upsert
+from rxdelta.names.store import REAL_SOURCES, really_named_rxcuis, rows_from_full_name, upsert
 
 FIELDNAMES = ("rxcui", "name", "source", "fetched_at")
 
@@ -77,7 +77,10 @@ def merge_into_db(conn: sqlite3.Connection, names: dict[str, DrugName]) -> int:
     Each cached name lands as the RXCUI's full name, plus a brand row when the
     name carries one in brackets. Returns the number of RXCUIs named.
     """
-    resolved = [n for n in names.values() if n.name]
+    real = really_named_rxcuis(conn)
+    resolved = [
+        n for n in names.values() if n.name and (n.source in REAL_SOURCES or n.rxcui not in real)
+    ]
     if not resolved:
         return 0
     upsert(
