@@ -975,6 +975,12 @@ tool caps in config, so they are not separate settings. The `find_drug` default
 
 ### CI
 
+> Superseded in part. `astral-sh/setup-uv@v10` failed to resolve on the
+> first push ("unable to find version `v10`"): that action publishes only full
+> version tags, with no moving major tag. The workflow pins `v10.3.3`, the
+> latest release. `actions/checkout@v7` resolved, since that repository does
+> keep a `v7` tag.
+
 **Actions bumped to the current majors.** `actions/checkout@v4` became `@v7`
 and `astral-sh/setup-uv@v5` became `@v10` (latest releases v7.0.1 and v10.3.3,
 checked against the GitHub releases API on 2026-11-17). Both still take the
