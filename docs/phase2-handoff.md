@@ -25,7 +25,7 @@ usually empty).
 
 - `answer`: one of the structured answer models (`drug_list`, `count`, `change`,
   `coverage`, `cost_range`, `no_data` with a reason, `refusal`, `clarify`). The
-  scorer compares this, not the text. The model has to produce it, for example
+  scorer compares this, not the text. The agent has to produce it, for example
   through a final "submit answer" tool whose input schema is the answer union.
 - `final_text`: what the person reads.
 - `tool_calls`: every call as `ToolCallRecord(name, args, result, duration_ms)`,
@@ -48,12 +48,12 @@ no `$ref`, enums are spelled out, optional fields are omitted rather than
 nullable, and every description says what the tool does not do and gives an
 example input. `call_tool` validates arguments through the Pydantic input model;
 a bad call returns `ok=False` with `error.code = "invalid_args"` and a message
-the model can read and fix. Other codes: `month_not_loaded`, `unknown_drug`,
+the agent can read and fix. Other codes: `month_not_loaded`, `unknown_drug`,
 `unknown_plan`, `no_results` (the query ran and found nothing, `note` says
 why), `internal`.
 
-Pass the model `data`, `total`, `truncated`, `note` and `error`. Keep
-`provenance` out of the prompt: it can be large (every row key behind a count)
+Pass the agent `data`, `total`, `truncated`, `note` and `error`. Keep
+`provenance` out of what the agent reads: it can be large (every row key behind a count)
 and is meant for checks, not for reading.
 
 ## What the grounding check expects

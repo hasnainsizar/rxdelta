@@ -71,10 +71,10 @@ Findings:
 
 ## Names used by the new code
 
-The new code uses the real names above. Where the prompt names something that
+The new code uses the real names above. Where the brief names something that
 does not exist, the mapping is:
 
-| prompt says | real equivalent |
+| brief says | real equivalent |
 |---|---|
 | plan information table | `plan_info` |
 | PA, ST, QL | `prior_auth`, `step_therapy`, `quantity_limit` (+ `quantity_limit_amount`, `quantity_limit_days`) |
@@ -87,7 +87,7 @@ does not exist, the mapping is:
 ## What can be answered
 
 With a database built from the new three month fixture set (below), every
-category in the prompt is answerable:
+category in the brief is answerable:
 
 | category | needs | available |
 |---|---|---|
@@ -106,7 +106,7 @@ On the real checkout nothing is answerable until months are loaded.
 
 ## Gaps and how each is handled
 
-1. **No months loaded locally.** Per the prompt, no CMS files are downloaded.
+1. **No months loaded locally.** Per the brief, no CMS files are downloaded.
    A new deterministic fixture set, `tests/fixtures/ask/`, covers 2026-01,
    2026-02 and 2026-03, three formularies, five plans, about 45 products and
    every one of the twelve change types in each month pair. It is written by

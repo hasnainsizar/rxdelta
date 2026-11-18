@@ -381,8 +381,8 @@ Each run writes `runs/<time>_<runner>_<split>/` with every answer and score, a
 summary, an HTML report and a markdown table.
 
 **Why the eval came first.** An agent that answers health plan questions has to
-be measured before it is trusted, and every later change to a prompt, a tool or
-a model has to be compared against the same yardstick. Building the eval before
+be measured before it is trusted, and every later change to the agent, a tool or
+the data has to be compared against the same yardstick. Building the eval before
 the agent means the first agent run already has a score, and every run after it
 shows exactly what got better and what broke.
 

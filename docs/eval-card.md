@@ -86,7 +86,7 @@ list items is hard, and a misspelling lifts one level.
 
 ## Splits
 
-Stratified by category: 70 percent `dev`, for tuning prompts, and 30 percent
+Stratified by category: 70 percent `dev`, for tuning, and 30 percent
 `test`, held out and only run when reporting results. The current file has 155
 dev and 65 test items.
 

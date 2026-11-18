@@ -8,29 +8,29 @@ repo root.
 ## Setup
 
 **The checkout was not a git repository, so one was created.** The folder had no
-`.git` anywhere. The prompt asks for a branch and a commit per step, so the
+`.git` anywhere. The brief asks for a branch and a commit per step, so the
 existing files were committed unchanged to `main` as a baseline and the work
 happens on `feat/ask-phase1`. Would change: if this folder is later reconciled
 with an upstream clone, the baseline commit should be replaced by the upstream
 history and the branch rebased onto it.
 
 **Package name mapping: none needed.** The package folder inside `rxdelta_main/`
-is `rxdelta/`, which matches the prompt.
+is `rxdelta/`, which matches the brief.
 
 **Ruff no longer formats Markdown.** The installed ruff formats Python code
 blocks inside `.md` files, so `ruff format --check` failed on
 `docs/phase1-prompt.md` before any work started. Markdown is excluded from ruff
-rather than rewriting the prompt. Would change: if the docs should have their
+rather than rewriting the brief. Would change: if the docs should have their
 code blocks formatted, drop the exclusion and reformat them.
 
 **This log lives at `docs/decisions.md`, beside the existing root `DECISIONS.md`.**
-The prompt names `docs/decisions.md`. The root file records the original build
+The brief names `docs/decisions.md`. The root file records the original build
 and is long; Phase 1 entries are kept separate and the two link to each other.
 
 ## Data
 
 **No months are loaded locally, so everything is built on fixtures.** There is no
-database file in the checkout. Per the prompt, no CMS files were downloaded. A
+database file in the checkout. Per the brief, no CMS files were downloaded. A
 new three month fixture set in `tests/fixtures/ask/` covers every change type in
 every month pair, `rxdelta evalset build` takes `--db`, and the committed
 `evals/rxdelta_v1.jsonl` is built from the fixture database. **The published
@@ -50,10 +50,10 @@ are invented, in ranges that do not collide with the sample data, so nothing in
 the repo implies they are real RxNorm or FDA codes. Would change: if a real
 RxNorm subset is ever committed, switch to its identifiers.
 
-## Mapping the prompt onto the real schema
+## Mapping the brief onto the real schema
 
 **Twelve change types, not ten.** The existing classifier also emits
-`quantity_limit_tightened` and `quantity_limit_loosened`. The prompt says the
+`quantity_limit_tightened` and `quantity_limit_loosened`. The brief says the
 enum must match the classifier exactly, so the tools use
 `rxdelta.types.ChangeType` itself, with its existing values (`prior_auth_added`
 rather than `pa_added`).
@@ -86,7 +86,7 @@ write exactly `rxnav`, `rrf` and `fixture`.
 **`names refresh` is left exactly as it was; `names fetch` is new.** `refresh`
 maintains the committed CSV cache through the old urllib client and is part of
 the existing surface. `fetch` writes full, ingredient and brand names straight
-to the database through `httpx`, which the prompt allows and which makes the
+to the database through `httpx`, which the brief allows and which makes the
 transport easy to mock. The two share the token bucket rate limiter and the
 `[names]` rate, retry and timeout settings. Would change: retiring the CSV
 cache, at which point `refresh` can be removed.
@@ -110,7 +110,7 @@ run rather than recorded as "not found".
 
 **The RRF loader stores full names and bracketed brands, not ingredients.**
 `RXNCONSO.RRF` carries names but the drug to ingredient links live in
-`RXNREL.RRF`, which the prompt does not mention. Ingredient queries still match
+`RXNREL.RRF`, which the brief does not mention. Ingredient queries still match
 through the token stage, because the ingredient is part of every clinical drug
 name. Would change: accept an `--rel` file and walk the ingredient relations.
 
@@ -134,7 +134,7 @@ The envelope has one error slot and the code list includes `no_results`, so an
 empty but valid query uses it: the note says why it is empty (no changes of that
 kind, drug not on that formulary), and `data` holds the empty shape so the
 caller still sees what was searched. `unknown_drug` and `unknown_plan` are used
-when the thing itself is not found. Would change: if Phase 2 prompting works
+when the thing itself is not found. Would change: if the Phase 2 agent works
 better with `ok=True` for empty answers, flip it in `envelope.failure`.
 
 **Unknown formulary IDs return `unknown_plan`.** There is no `unknown_formulary`
@@ -167,9 +167,9 @@ files `diff_snapshots` takes about ten seconds. The memo key includes the file's
 modification time and size, so a reload invalidates it. Would change: a long
 running server would want a size bound on the memo.
 
-**Provenance keys are not capped.** The prompt asks for exactly which rows
+**Provenance keys are not capped.** The brief asks for exactly which rows
 produced an answer, so `count_changes` lists every row key it counted. On real
-data that can be large. Phase 2 should keep provenance out of the text the model
+data that can be large. Phase 2 should keep provenance out of the text the agent
 reads and use it only for the grounding check. Would change: a config cap with
 a truncation flag, if the size becomes a problem.
 
@@ -193,7 +193,7 @@ from the model, so it always matches what validation enforces.
 **There is no JSON Schema validator dependency.** The schema test checks the
 structure that matters (no references, valid type names, required fields that
 exist and match the model, every example round trips through its input model)
-rather than adding `jsonschema`, which the prompt's dependency rule would need a
+rather than adding `jsonschema`, which the brief's dependency rule would need a
 justification for.
 
 ## Eval set
@@ -205,18 +205,18 @@ or `rxdelta.diff`; both an AST check and a subprocess import check enforce
 that. Classification, filters and the cost range are written again in SQL and
 plain Python. Would change: nothing; this is the point of the gold module.
 
-**Gold arguments carry the question's own wording.** The prompt's item format
+**Gold arguments carry the question's own wording.** The brief's item format
 has a readable `gold_query` string. The oracle needs machine readable
 arguments, so each item also has `gold: {query, args}`, and the arguments
 include the drug and plan exactly as the question names them. The oracle looks
 those up through `find_drug` and `find_plan` rather than using the gold RXCUI,
 so a matcher bug shows up as an oracle miss.
 
-**Eval items carry `alternative` and `tags` beyond the prompt's format.**
+**Eval items carry `alternative` and `tags` beyond the brief's format.**
 `alternative` holds the full answer for every candidate of an ambiguous item,
 which the scorer accepts in place of a clarifying question. `tags` marks
 subtypes (wrong premise, needs the month list, no matching change), which keeps
-the category list exactly as the prompt defines it.
+the category list exactly as the brief defines it.
 
 **Count questions ask about drugs.** "How many drugs moved up a tier" is scored
 against the distinct RXCUI count (`count_changes` totals `drugs`), and the
@@ -230,7 +230,7 @@ question, every formulary's changes are part of the answer.
 category.** "Ozempic" is three RXCUIs, so non-ambiguous Ozempic questions say
 "Ozempic 1 mg". Every mention is checked against the matcher before use.
 
-**The typo share is the `typo` entry of `[evalset.mix]`.** The prompt lists
+**The typo share is the `typo` entry of `[evalset.mix]`.** The brief lists
 "typo share" separately from the mix, but the mix already has a typo category,
 and a second key would let the two disagree. Misspellings that match nothing
 become `no_answer` items (reason `unknown_drug`), capped at a quarter of the no
@@ -303,7 +303,7 @@ fixture database that `make evaldb` writes there; the default makes the
 documented command work without flags. Any other database is refused unless
 its row counts match the manifest.
 
-**A database whose row counts differ from the manifest is refused.** The prompt
+**A database whose row counts differ from the manifest is refused.** The brief
 asks for a hash check on the eval file. Gold answers are also only valid for the
 database they were computed from, so the harness compares the row counts the
 manifest recorded too. Would change: a content hash of the tables, if row
@@ -343,7 +343,7 @@ byte for byte the same; only the manifest's config hash changed.
 **What stays in code.** Request sizes the oracle asks for (it pages
 `get_changes` 100 rows at a time and asks `find_drug` for 25) are bounded by the
 tool caps in config, so they are not separate settings. The `find_drug` default
-`limit` of 10 is part of the tool's input schema, as the prompt specifies.
+`limit` of 10 is part of the tool's input schema, as the brief specifies.
 
 ## CI
 

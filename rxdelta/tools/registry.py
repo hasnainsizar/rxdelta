@@ -177,7 +177,7 @@ def clean_schema(model: type[BaseModel]) -> dict[str, Any]:
 
 
 def anthropic_tools() -> list[dict[str, Any]]:
-    """Tool definitions in the shape the Messages API tools parameter takes."""
+    """Tool definitions as a list of name, description and input schema."""
     return [
         {"name": s.name, "description": s.description, "input_schema": clean_schema(s.input_model)}
         for s in TOOLS
