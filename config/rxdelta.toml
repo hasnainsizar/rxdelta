@@ -343,9 +343,9 @@ max_tokens = 8192
 # Thinking effort sent with every request: low, medium, high, xhigh or max.
 effort = "medium"
 # Model responses allowed per question before the run ends with an error.
-max_turns = 12
+max_turns = 40
 # Tool calls allowed per question, submit_answer excluded.
-max_tool_calls = 24
+max_tool_calls = 100
 # Spend allowed per question, in US dollars, before the run ends with an error.
 max_cost_per_question_usd = 0.50
 # A tool result the model reads is shortened past this many characters of JSON.

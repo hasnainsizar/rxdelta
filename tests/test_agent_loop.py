@@ -247,6 +247,19 @@ def test_consistency_guard_wants_a_partial_list_said_to_be_partial(ctx: ToolCont
     )
     assert consistency_problems(clarify, "Which one?") != []
     assert consistency_problems(clarify, "Which Ozempic?") == []
+    coverage = {
+        "kind": "coverage",
+        "rxcui": "1",
+        "month": "2026-01",
+        "formulary_id": "1",
+        "tier": 1,
+        "prior_auth": False,
+        "step_therapy": False,
+        "quantity_limit": False,
+    }
+    assert consistency_problems(parse_answer(coverage), "Tier 1.") == []
+    zeros = parse_answer({**coverage, "quantity_limit_amount": 0.0, "quantity_limit_days": 0})
+    assert any("leave quantity_limit_amount" in p for p in consistency_problems(zeros, "Tier 1."))
     refusal = parse_answer({"kind": "refusal"})
     assert consistency_problems(refusal, "As an AI I cannot say.") != []
 

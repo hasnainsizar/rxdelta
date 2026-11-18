@@ -12,7 +12,13 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from rxdelta.ask.answer import ClarifyAnswer, CountAnswer, DrugListAnswer, StructuredAnswer
+from rxdelta.ask.answer import (
+    ClarifyAnswer,
+    CountAnswer,
+    CoverageAnswer,
+    DrugListAnswer,
+    StructuredAnswer,
+)
 from rxdelta.ask.answer import parse_answer as _parse
 from rxdelta.evals import grounding
 
@@ -71,6 +77,14 @@ def consistency_problems(answer: StructuredAnswer, text: str) -> list[str]:
             problems.append(
                 "The list is marked truncated but final_text does not say it is partial."
             )
+    if (
+        isinstance(answer, CoverageAnswer)
+        and not answer.quantity_limit
+        and (answer.quantity_limit_amount is not None or answer.quantity_limit_days is not None)
+    ):
+        problems.append(
+            "quantity_limit is false, so leave quantity_limit_amount and quantity_limit_days out."
+        )
     if isinstance(answer, ClarifyAnswer):
         lowered = text.lower()
         missing = [c.product for c in answer.candidates if c.product.lower() not in lowered]
