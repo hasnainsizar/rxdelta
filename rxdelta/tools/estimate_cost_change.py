@@ -70,6 +70,9 @@ class DollarRange(BaseModel):
 
 
 class PlanCost(BaseModel):
+    """`priced` means the change range is known; `before` and `after` stay empty
+    when the plan publishes no dollar amount for the tier."""
+
     plan_id: str
     tier_before: int | None
     tier_after: int | None
@@ -210,8 +213,10 @@ def estimate_cost_change(
             if tier_after:
                 keys.append(f"beneficiary_cost:{args.to_month}:{key}:{level}:{tier_after}")
             if tier_before == tier_after:
+                # Same tier, same published cost sharing: the change is known to
+                # be zero even when the plan publishes no dollar amount for it.
                 change: DollarRange | None = DollarRange(low=0.0, high=0.0)
-                priced = cost_before.known
+                priced = True
             else:
                 plan_open = tier_before is None or tier_after is None
                 open_ended = open_ended or plan_open

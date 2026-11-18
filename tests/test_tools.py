@@ -459,6 +459,27 @@ def test_estimate_cost_change_without_a_tier_move_is_zero(ctx: ToolContext) -> N
     assert "did not change tier" in (result.note or "")
 
 
+def test_no_tier_move_is_a_zero_change_even_when_the_tier_is_unpriced(
+    ctx: ToolContext,
+) -> None:
+    """Plan S9012-001 publishes no dollar bounds for tier 5 coinsurance. Humira
+    stays on tier 5 there, so the change is zero though no amount is known."""
+    result = call(
+        ctx,
+        "estimate_cost_change",
+        rxcui="8800331",
+        from_month="2026-01",
+        to_month="2026-02",
+        plan_id="S9012-001",
+    )
+    assert result.ok and result.data is not None
+    assert result.data.before is None and result.data.after is None
+    assert result.data.change is not None
+    assert (result.data.change.low, result.data.change.high) == (0.0, 0.0)
+    assert result.data.priced
+    assert "did not change tier" in (result.note or "")
+
+
 def test_estimate_cost_change_empty_and_errors(ctx: ToolContext) -> None:
     empty_cost = call(
         ctx,
