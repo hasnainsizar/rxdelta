@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rxdelta eval: {{ s.runner }} on {{ s.split }}</title>
+<style>
+{% for face in faces %}
+@font-face {
+  font-family: "{{ face.family }}";
+  font-style: normal;
+  font-weight: {{ face.weight }};
+  font-display: swap;
+  src: url({{ face.data_uri }}) format("woff2");
+}
+{% endfor %}
+/* Tokens and table rules follow report.html.j2 so the two pages read as one family. */
+:root {
+  --paper: oklch(1.000 0.000 0);
+  --band: oklch(0.976 0.003 250);
+  --rule: oklch(0.885 0.006 250);
+  --rule-strong: oklch(0.620 0.010 250);
+  --ink: oklch(0.215 0.010 250);
+  --ink-2: oklch(0.445 0.012 250);
+  --ink-3: oklch(0.535 0.012 250);
+  --up: oklch(0.425 0.105 25);
+  --down: oklch(0.470 0.068 168);
+  --sans: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Roboto Mono", Menlo, Consolas, monospace;
+  --s-2: 0.5rem; --s-3: 0.75rem; --s-4: 1rem; --s-5: 1.5rem; --s-7: 3rem;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-base: 0.9375rem; --t-md: 1.0625rem; --t-xl: 1.75rem;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { font-variant-numeric: tabular-nums; }
+body { margin: 0; padding: var(--s-7) var(--s-4); background: var(--paper); color: var(--ink);
+       font-family: var(--sans); font-size: var(--t-base); line-height: 1.55; }
+main { max-width: 60rem; margin: 0 auto; }
+h1, h2 { margin: 0; font-weight: 600; }
+h1 { font-size: var(--t-xl); line-height: 1.15; letter-spacing: -0.018em; }
+.masthead { border-bottom: 1px solid var(--ink); padding-bottom: var(--s-3); margin-bottom: var(--s-2); }
+.wordmark { font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.14em;
+            text-transform: uppercase; color: var(--ink-2); margin-bottom: var(--s-3); }
+.filed { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); border-bottom: 1px solid var(--rule);
+         padding-bottom: var(--s-3); margin-bottom: var(--s-7); font-size: var(--t-xs); color: var(--ink-3); }
+.filed .v { font-family: var(--mono); color: var(--ink-2); }
+section { margin-bottom: var(--s-7); }
+.head { border-bottom: 1px solid var(--rule-strong); padding-bottom: var(--s-2); margin-bottom: var(--s-4); }
+.head h2 { font-size: var(--t-md); }
+.scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+         border-top: 1px solid var(--rule); margin: 0; }
+.scope > div { padding: var(--s-3) var(--s-4) var(--s-3) 0; border-bottom: 1px solid var(--rule); }
+.scope dt { font-size: var(--t-xs); color: var(--ink-3); }
+.scope dd { margin: 0; font-size: var(--t-md); font-weight: 600; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
+thead th { text-align: left; font-size: var(--t-xs); font-weight: 600; color: var(--ink-2);
+           letter-spacing: 0.04em; text-transform: uppercase; padding: 0 var(--s-3) var(--s-2) 0;
+           border-bottom: 1px solid var(--rule-strong); }
+tbody td { padding: var(--s-3) var(--s-3) var(--s-3) 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.mono { font-family: var(--mono); font-size: var(--t-xs); white-space: pre-wrap; word-break: break-word; }
+.note { color: var(--ink-2); font-size: var(--t-sm); }
+.fail { color: var(--up); font-weight: 600; }
+.pass { color: var(--down); font-weight: 600; }
+.item { border-bottom: 1px solid var(--rule-strong); padding: var(--s-4) 0; }
+.item h3 { margin: 0 0 var(--s-2); font-size: var(--t-base); font-weight: 600; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); }
+@media (max-width: 46rem) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="masthead">
+    <div class="wordmark">rxdelta / question eval</div>
+    <h1>{{ s.runner }} runner, {{ s.split }} split</h1>
+  </header>
+  <div class="filed">
+    <span>Started <span class="v">{{ s.started_at }}</span></span>
+    <span>Eval set <span class="v">{{ s.eval_set_sha256[:12] }}</span></span>
+    <span>Config <span class="v">{{ s.config_sha256[:12] }}</span></span>
+    <span>Commit <span class="v">{{ (s.git_commit or "none")[:12] }}</span></span>
+  </div>
+
+  <section>
+    <div class="head"><h2>Headline</h2></div>
+    <dl class="scope">
+      <div><dt>Accuracy</dt><dd>{{ pct(s.overall.accuracy) }}</dd></div>
+      <div><dt>Items</dt><dd>{{ s.overall.items }}</dd></div>
+      <div><dt>Mean F1, drug lists</dt><dd>{{ pct(s.overall.mean_f1_drug_list) }}</dd></div>
+      <div><dt>False refusals</dt><dd>{{ s.overall.false_refusals }}</dd></div>
+      <div><dt>Missed refusals</dt><dd>{{ s.overall.missed_refusals }}</dd></div>
+      <div><dt>Ungrounded numbers</dt><dd>{{ s.grounding.items_with_ungrounded }} items</dd></div>
+      <div><dt>Required tools called</dt><dd>{{ pct(s.tools.required_called_rate) }}</dd></div>
+      <div><dt>p95 latency</dt><dd>{{ "%.0f"|format(s.cost_speed.latency_ms.p95) }} ms</dd></div>
+    </dl>
+    <p class="note" style="margin-top: var(--s-3)">
+      Gate:
+      {% if s.gates.passed %}<span class="pass">passed</span>{% else %}<span class="fail">failed</span>, {{ s.gates.reasons|join("; ") }}{% endif %}.
+      Accuracy must be at least {{ pct(s.gates.min_accuracy) }} and the missed refusal rate at most
+      {{ pct(s.gates.max_missed_refusal_rate) }}.
+    </p>
+  </section>
+
+  <section>
+    <div class="head"><h2>By category</h2></div>
+    <table>
+      <thead><tr><th scope="col">Category</th><th scope="col" class="num">Items</th>
+        <th scope="col" class="num">Correct</th><th scope="col" class="num">Accuracy</th>
+        <th scope="col" class="num">Mean F1</th></tr></thead>
+      <tbody>
+      {% for name, row in s.by_category.items() %}
+        <tr><td>{{ name }}</td><td class="num">{{ row.items }}</td><td class="num">{{ row.correct }}</td>
+          <td class="num">{{ pct(row.accuracy) }}</td><td class="num">{{ pct(row.mean_f1) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="head"><h2>Answer kind confusion</h2></div>
+    <p class="note">Rows are the expected kind, columns the kind the runner returned.</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th scope="col">Expected</th>{% for k in kinds %}<th scope="col" class="num">{{ k }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for expected in kinds if expected in s.kind_confusion %}
+        <tr><td>{{ expected }}</td>{% for got in kinds %}<td class="num">{{ s.kind_confusion[expected].get(got, "") }}</td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Worst items</h2></div>
+    {% if worst %}
+    {% for w in worst %}
+    <div class="item">
+      <h3>{{ w.id }}, {{ w.category }}</h3>
+      <p>{{ w.question }}</p>
+      {% if w.error %}<p class="fail">Runner error: {{ w.error }}</p>{% endif %}
+      <div class="pair">
+        <div><div class="note">Expected</div><div class="mono">{{ w.expected }}</div></div>
+        <div><div class="note">Got</div><div class="mono">{{ w.got }}</div></div>
+      </div>
+      <p class="note">Final text: {{ w.text or "(empty)" }}</p>
+      {% if w.ungrounded %}<p class="note">Ungrounded numbers: <span class="mono">{{ w.ungrounded|join(", ") }}</span></p>{% endif %}
+      <div class="note">Tool calls</div>
+      {% if w.calls %}<div class="mono">{{ w.calls|join("\n") }}</div>{% else %}<p class="note">None.</p>{% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="note">Every item was answered correctly with every number grounded. There are no failures to show.</p>
+    {% endif %}
+  </section>
+</main>
+</body>
+</html>

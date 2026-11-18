@@ -39,6 +39,14 @@ def change_types(types: tuple[ChangeType, ...]) -> str:
     return ", ".join(t.label for t in types)
 
 
+def change_label(group: ChangeGroup) -> str:
+    """The change types, and for a tier move what it does to the member's cost."""
+    label = change_types(group.change_types)
+    if group.cost_direction is not None:
+        label += f" ({group.cost_direction.phrase})"
+    return label
+
+
 def tier_move(config: Config, group: ChangeGroup) -> str:
     before = config.tier_label(group.tier_before)
     after = config.tier_label(group.tier_after)

@@ -1,0 +1,811 @@
+"""Gold answers, computed straight from the tables.
+
+Nothing here imports rxdelta.tools or rxdelta.diff. The change classification,
+the cost range and every lookup are written again in SQL, so a bug in a tool
+shows up as a disagreement instead of being copied into the eval set. The
+shared pieces are the answer contract in rxdelta.ask (payload models and the
+canonical before and after strings), the config, and rxdelta.swaps, the one rule
+for package code swaps that the diff, the report and the tools use too. That
+rule is tested directly in tests/test_swaps.py, because gold cannot catch a bug
+in it.
+"""
+
+from __future__ import annotations
+
+import re
+import sqlite3
+import threading
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from rxdelta.ask.answer import (
+    ChangeAnswer,
+    ChangeItem,
+    ClarifyAnswer,
+    ClarifyCandidate,
+    CostRangeAnswer,
+    CountAnswer,
+    CoverageAnswer,
+    DrugListAnswer,
+    NoDataAnswer,
+    NoDataReason,
+    RefusalAnswer,
+    StructuredAnswer,
+)
+from rxdelta.ask.values import CoverageState, change_values
+from rxdelta.config import Config, get_config
+from rxdelta.swaps import pair_swaps
+from rxdelta.types import ChangeType
+
+_PLAN_ID = re.compile(r"^([A-Z]\d{4})-(\d{1,3})(?:-(\d{1,3}))?$")
+_COLUMNS = (
+    "tier_level, prior_auth, step_therapy, quantity_limit, quantity_limit_amount, "
+    "quantity_limit_days"
+)
+
+
+class GoldError(Exception):
+    """A gold spec that cannot be evaluated against this database."""
+
+
+@dataclass(frozen=True)
+class GoldChange:
+    rxcui: str
+    formulary_from: str
+    formulary_to: str
+    change_type: ChangeType
+    before: str | None
+    after: str | None
+    tier_before: int | None
+    tier_after: int | None
+    plans: frozenset[str]
+    # For a tier move: "higher", "lower", "same" or "unknown" for the member's cost.
+    cost_direction: str | None = None
+
+
+# Months and plans
+
+
+def months(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute("SELECT DISTINCT snapshot_month FROM ingest_log ORDER BY 1").fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def resolve_month(conn: sqlite3.Connection, month: str) -> str:
+    """'latest' and 'previous' are resolved against what is loaded."""
+    loaded = months(conn)
+    if month == "latest":
+        return loaded[-1]
+    if month == "previous":
+        return loaded[-2]
+    return month
+
+
+def plan_key(plan_id: str) -> tuple[str, str, str]:
+    found = _PLAN_ID.match(plan_id.upper())
+    if not found:
+        raise GoldError(f"bad plan id {plan_id}")
+    contract, plan, segment = found.groups()
+    return contract, plan.zfill(3), (segment or "0").zfill(3)
+
+
+def plan_formulary(conn: sqlite3.Connection, plan_id: str, month: str) -> str | None:
+    contract, plan, segment = plan_key(plan_id)
+    row = conn.execute(
+        "SELECT formulary_id FROM plan_info WHERE snapshot_month = ? AND contract_id = ? "
+        "AND plan_id = ? AND segment_id = ?",
+        (month, contract, plan, segment),
+    ).fetchone()
+    return None if row is None else str(row[0])
+
+
+def full_names(conn: sqlite3.Connection, rxcuis: list[str]) -> list[str]:
+    names = dict(
+        conn.execute("SELECT rxcui, name FROM drug_names WHERE name_type = 'full'").fetchall()
+    )
+    return [str(names.get(r, f"RXCUI {r}")) for r in rxcuis]
+
+
+def rxcuis_with_token(conn: sqlite3.Connection, token: str) -> list[str]:
+    """RXCUIs with any name containing the word, for questions like 'insulin products'."""
+    rows = conn.execute(
+        "SELECT DISTINCT rxcui FROM drug_names WHERE ' ' || name_norm || ' ' LIKE ? ORDER BY 1",
+        (f"% {token.lower()} %",),
+    ).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def rxcuis_named(conn: sqlite3.Connection, name_norm: str) -> list[str]:
+    rows = conn.execute(
+        "SELECT DISTINCT rxcui FROM drug_names WHERE name_norm = ? ORDER BY 1", (name_norm,)
+    ).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def product_of(conn: sqlite3.Connection, rxcui: str) -> str:
+    for name_type in ("brand", "ingredient"):
+        rows = conn.execute(
+            "SELECT DISTINCT name FROM drug_names WHERE rxcui = ? AND name_type = ? ORDER BY 1",
+            (rxcui, name_type),
+        ).fetchall()
+        if rows:
+            return " / ".join(str(r[0]) for r in rows)
+    return full_names(conn, [rxcui])[0]
+
+
+# Coverage
+
+
+def _state(row: sqlite3.Row | tuple[Any, ...], offset: int = 0) -> CoverageState:
+    amount = row[offset + 4]
+    days = row[offset + 5]
+    return CoverageState(
+        tier=int(row[offset]),
+        prior_auth=bool(row[offset + 1]),
+        step_therapy=bool(row[offset + 2]),
+        quantity_limit=bool(row[offset + 3]),
+        quantity_limit_amount=None if amount is None else float(amount),
+        quantity_limit_days=None if days is None else int(days),
+    )
+
+
+def coverage_state(
+    conn: sqlite3.Connection, rxcui: str, month: str, formulary_id: str
+) -> CoverageState | None:
+    rows = conn.execute(
+        f"SELECT {_COLUMNS} FROM formulary WHERE snapshot_month = ? AND formulary_id = ? "  # noqa: S608
+        "AND rxcui = ? ORDER BY ndc_11",
+        (month, formulary_id, rxcui),
+    ).fetchall()
+    states = {_state(r) for r in rows}
+    if len(states) > 1:
+        raise GoldError(f"RXCUI {rxcui} has NDCs that disagree on formulary {formulary_id}")
+    return next(iter(states), None)
+
+
+def _known_rxcui(conn: sqlite3.Connection, rxcui: str) -> bool:
+    return bool(
+        conn.execute("SELECT 1 FROM formulary WHERE rxcui = ? LIMIT 1", (rxcui,)).fetchone()
+        or conn.execute("SELECT 1 FROM drug_names WHERE rxcui = ? LIMIT 1", (rxcui,)).fetchone()
+    )
+
+
+def coverage(
+    conn: sqlite3.Connection,
+    rxcui: str,
+    month: str,
+    formulary_id: str | None = None,
+    plan_id: str | None = None,
+) -> StructuredAnswer:
+    month = resolve_month(conn, month)
+    if month not in months(conn):
+        return NoDataAnswer(reason=NoDataReason.month_not_loaded)
+    if not _known_rxcui(conn, rxcui):
+        return NoDataAnswer(reason=NoDataReason.unknown_drug)
+    if plan_id:
+        formulary_id = plan_formulary(conn, plan_id, month)
+        if formulary_id is None:
+            raise GoldError(f"plan {plan_id} not in {month}")
+    if formulary_id is None:
+        raise GoldError("coverage needs a formulary or a plan")
+    state = coverage_state(conn, rxcui, month, formulary_id)
+    if state is None:
+        return NoDataAnswer(reason=NoDataReason.not_on_formulary)
+    return CoverageAnswer(
+        rxcui=rxcui,
+        month=month,
+        formulary_id=formulary_id,
+        tier=state.tier,
+        prior_auth=state.prior_auth,
+        step_therapy=state.step_therapy,
+        quantity_limit=state.quantity_limit,
+        quantity_limit_amount=state.quantity_limit_amount,
+        quantity_limit_days=state.quantity_limit_days,
+    )
+
+
+# Changes, classified again in SQL
+
+_PAIRS_SQL = """
+SELECT a.contract_id || '-' || a.plan_id || '-' || a.segment_id AS plan,
+       a.formulary_id AS f_from, b.formulary_id AS f_to
+  FROM plan_info a
+  JOIN plan_info b
+    ON b.contract_id = a.contract_id AND b.plan_id = a.plan_id AND b.segment_id = a.segment_id
+ WHERE a.snapshot_month = :m_from AND b.snapshot_month = :m_to
+"""
+
+_FIELDS = (
+    ("rxcui", "rxcui"),
+    ("tier_level", "tier"),
+    ("prior_auth", "pa"),
+    ("step_therapy", "st"),
+    ("quantity_limit", "ql"),
+    ("quantity_limit_amount", "amt"),
+    ("quantity_limit_days", "days"),
+)
+_SIDE = ", ".join(f"{{p}}.{column} AS {{p}}_{alias}" for column, alias in _FIELDS)
+_NULL_SIDE = ", ".join(f"NULL AS x_{alias}" for _, alias in _FIELDS)
+
+_JOINED_SQL = f"""
+WITH pairs AS (SELECT DISTINCT f_from, f_to FROM ({_PAIRS_SQL}))
+SELECT pairs.f_from, pairs.f_to, x.ndc_11, {_SIDE.format(p="x")}, {_SIDE.format(p="y")}
+  FROM pairs
+  JOIN formulary x ON x.snapshot_month = :m_from AND x.formulary_id = pairs.f_from
+  LEFT JOIN formulary y
+    ON y.snapshot_month = :m_to AND y.formulary_id = pairs.f_to AND y.ndc_11 = x.ndc_11
+UNION ALL
+SELECT pairs.f_from, pairs.f_to, y.ndc_11, {_NULL_SIDE}, {_SIDE.format(p="y")}
+  FROM pairs
+  JOIN formulary y ON y.snapshot_month = :m_to AND y.formulary_id = pairs.f_to
+ WHERE NOT EXISTS (
+       SELECT 1 FROM formulary x
+        WHERE x.snapshot_month = :m_from AND x.formulary_id = pairs.f_from
+          AND x.ndc_11 = y.ndc_11)
+"""
+
+# Rows that differ between the months, NDC by NDC; a_* is the earlier month.
+_DIFFERING_SQL = f"""
+SELECT * FROM ({_JOINED_SQL})
+ WHERE x_rxcui IS NULL OR y_rxcui IS NULL
+    OR x_tier <> y_tier OR x_pa <> y_pa OR x_st <> y_st OR x_ql <> y_ql
+    OR IFNULL(x_amt, -1) <> IFNULL(y_amt, -1) OR IFNULL(x_days, -1) <> IFNULL(y_days, -1)
+"""
+
+# (formulary before, formulary after, rxcui, state before, state after)
+_NdcRow = tuple[str, str, str, CoverageState | None, CoverageState | None]
+
+_LISTED_SQL = "SELECT DISTINCT formulary_id, rxcui FROM formulary WHERE snapshot_month = ?"
+
+
+def _change_types(before: CoverageState, after: CoverageState) -> list[ChangeType]:
+    """What changed for one drug that is on the formulary in both months."""
+    found: list[ChangeType] = []
+    if after.tier != before.tier:
+        found.append(ChangeType.TIER_UP if after.tier > before.tier else ChangeType.TIER_DOWN)
+    for flag, added, removed in (
+        ("prior_auth", ChangeType.PRIOR_AUTH_ADDED, ChangeType.PRIOR_AUTH_REMOVED),
+        ("step_therapy", ChangeType.STEP_THERAPY_ADDED, ChangeType.STEP_THERAPY_REMOVED),
+        ("quantity_limit", ChangeType.QUANTITY_LIMIT_ADDED, ChangeType.QUANTITY_LIMIT_REMOVED),
+    ):
+        was, now = getattr(before, flag), getattr(after, flag)
+        if now and not was:
+            found.append(added)
+        elif was and not now:
+            found.append(removed)
+    limits = (
+        before.quantity_limit_amount,
+        before.quantity_limit_days,
+        after.quantity_limit_amount,
+        after.quantity_limit_days,
+    )
+    if before.quantity_limit and after.quantity_limit and all(limits):
+        old_amount, old_days, new_amount, new_days = (float(v or 0) for v in limits)
+        # Compare allowances per day without dividing: a/b < c/d iff a*d < c*b.
+        if new_amount * old_days < old_amount * new_days:
+            found.append(ChangeType.QUANTITY_LIMIT_TIGHTENED)
+        elif new_amount * old_days > old_amount * new_days:
+            found.append(ChangeType.QUANTITY_LIMIT_LOOSENED)
+    return found
+
+
+_memo: dict[tuple[str, int, int, str, str], list[GoldChange]] = {}
+_memo_lock = threading.Lock()
+
+
+def _db_state(conn: sqlite3.Connection) -> tuple[str, int, int]:
+    path = str(conn.execute("PRAGMA database_list").fetchone()[2])
+    stat = Path(path).stat()
+    return path, stat.st_mtime_ns, stat.st_size
+
+
+def changes(
+    conn: sqlite3.Connection, month_from: str, month_to: str, config: Config | None = None
+) -> list[GoldChange]:
+    """Every classified change for a month pair, memoized per database file state."""
+    key = (*_db_state(conn), month_from, month_to)
+    with _memo_lock:
+        if key not in _memo:
+            _memo[key] = _classify(conn, config or get_config(), month_from, month_to)
+        return _memo[key]
+
+
+# Cost direction, read again from the raw beneficiary cost rows.
+
+_Leg = tuple[str, float | None, float | None, float | None]
+
+
+def _month_legs(
+    conn: sqlite3.Connection, config: Config, month: str
+) -> dict[tuple[str, int], dict[tuple[str, str], _Leg]]:
+    """(plan, tier) to {(days supply, channel): (kind, amount, min, max)}."""
+    out: dict[tuple[str, int], dict[tuple[str, str], _Leg]] = defaultdict(dict)
+    for row in conn.execute(
+        "SELECT * FROM beneficiary_cost WHERE snapshot_month = ? AND coverage_level = ?",
+        (month, config.impact.coverage_level),
+    ).fetchall():
+        plan = f"{row['contract_id']}-{row['plan_id']}-{row['segment_id']}"
+        for channel in _CHANNELS:
+            code = str(row[f"cost_type_{channel}"] or "")
+            kind = config.codes.cost_type[code].kind if code else "blank"
+            out[(plan, int(row["tier"]))][(str(row["days_supply"]), channel)] = (
+                kind,
+                row[f"cost_amt_{channel}"],
+                row[f"cost_min_amt_{channel}"],
+                row[f"cost_max_amt_{channel}"],
+            )
+    return out
+
+
+def _leg_direction(old: _Leg, new: _Leg) -> str:
+    """What one channel at one supply length does, old tier to new."""
+    (old_kind, old_amount, *_), (new_kind, new_amount, *_) = old, new
+    if old_amount is None or new_amount is None:
+        return "unknown"
+    if old_kind == new_kind and old_kind in ("copay", "coinsurance"):
+        if new_amount == old_amount:
+            return "same"
+        return "higher" if new_amount > old_amount else "lower"
+    if {old_kind, new_kind} != {"copay", "coinsurance"}:
+        return "unknown"
+    # One side is a dollar copay and the other a share of a price we do not have.
+    copay_old = old_kind == "copay"
+    copay, share = (old_amount, new_amount) if copay_old else (new_amount, old_amount)
+    bounds_leg = new if copay_old else old
+    if copay == 0 and share == 0:
+        return "same"
+    if copay == 0 or share == 0:
+        copay_is_less = copay == 0
+    else:
+        bounds = [b for b in bounds_leg[2:] if b]
+        if not bounds or min(bounds) <= copay <= max(bounds):
+            return "unknown"
+        copay_is_less = copay < min(bounds)
+    new_is_less = copay_is_less != copay_old
+    return "lower" if new_is_less else "higher"
+
+
+def _tier_direction(
+    old: dict[tuple[str, str], _Leg] | None, new: dict[tuple[str, str], _Leg] | None
+) -> str:
+    if not old or not new:
+        return "unknown"
+    found = {_leg_direction(leg, new[k]) for k, leg in old.items() if k in new} - {"unknown"}
+    changed = found - {"same"}
+    if len(changed) == 1:
+        return changed.pop()
+    return "same" if found and not changed else "unknown"
+
+
+def _classify(
+    conn: sqlite3.Connection, config: Config, month_from: str, month_to: str
+) -> list[GoldChange]:
+    params = {"m_from": month_from, "m_to": month_to}
+    plans_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for plan, f_from, f_to in conn.execute(_PAIRS_SQL, params).fetchall():
+        plans_by_pair[(str(f_from), str(f_to))].add(str(plan))
+    listed = {
+        month: {(str(f), str(r)) for f, r in conn.execute(_LISTED_SQL, (month,)).fetchall()}
+        for month in (month_from, month_to)
+    }
+
+    both: list[_NdcRow] = []
+    removed: list[_NdcRow] = []
+    added: list[_NdcRow] = []
+    for row in conn.execute(_DIFFERING_SQL, params).fetchall():
+        f_from, f_to = str(row[0]), str(row[1])
+        before = _state(row, 4) if row[3] is not None else None
+        after = _state(row, 11) if row[10] is not None else None
+        rxcui = str(row[10] if row[10] is not None else row[3])
+        target = both if before and after else (removed if before else added)
+        target.append((f_from, f_to, rxcui, before, after))
+
+    swaps = pair_swaps(
+        removed,
+        added,
+        removed_key=lambda r: (r[0], r[1], r[2]),
+        added_key=lambda r: (r[0], r[1], r[2]),
+        listed_after=lambda k: (k[1], k[2]) in listed[month_to],
+        listed_before=lambda k: (k[0], k[2]) in listed[month_from],
+    )
+    found: list[tuple[str, str, str, ChangeType, CoverageState | None, CoverageState | None]] = []
+    for f_from, f_to, rxcui, before, after in both:
+        assert before is not None and after is not None
+        found += [(f_from, f_to, rxcui, t, before, after) for t in _change_types(before, after)]
+    for old, new in swaps.pairs:
+        assert old[3] is not None and new[4] is not None
+        found += [
+            (old[0], old[1], old[2], t, old[3], new[4]) for t in _change_types(old[3], new[4])
+        ]
+    found += [(r[0], r[1], r[2], ChangeType.DRUG_REMOVED, r[3], None) for r in swaps.removals]
+    found += [(r[0], r[1], r[2], ChangeType.DRUG_ADDED, None, r[4]) for r in swaps.additions]
+
+    tier_moves = (ChangeType.TIER_UP, ChangeType.TIER_DOWN)
+    legs_before = legs_after = {}
+    if any(f[3] in tier_moves for f in found):
+        legs_before = _month_legs(conn, config, month_from)
+        legs_after = _month_legs(conn, config, month_to)
+
+    grouped: dict[tuple[Any, ...], set[str]] = defaultdict(set)
+    tiers: dict[tuple[Any, ...], tuple[int | None, int | None]] = {}
+    for f_from, f_to, rxcui, change_type, before, after in found:
+        before_value, after_value = change_values(change_type, before, after)
+        base = (rxcui, f_from, f_to, change_type, before_value, after_value)
+        tier_pair = (before.tier if before else None, after.tier if after else None)
+        for plan in plans_by_pair[(f_from, f_to)]:
+            direction = None
+            if change_type in tier_moves:
+                assert before is not None and after is not None
+                direction = _tier_direction(
+                    legs_before.get((plan, before.tier)), legs_after.get((plan, after.tier))
+                )
+            grouped[(*base, direction)].add(plan)
+            tiers[(*base, direction)] = tier_pair
+    return sorted(
+        (
+            GoldChange(
+                rxcui=k[0],
+                formulary_from=k[1],
+                formulary_to=k[2],
+                change_type=k[3],
+                before=k[4],
+                after=k[5],
+                tier_before=tiers[k][0],
+                tier_after=tiers[k][1],
+                plans=frozenset(p),
+                cost_direction=k[6],
+            )
+            for k, p in grouped.items()
+        ),
+        key=lambda c: (
+            c.formulary_to,
+            c.rxcui,
+            c.change_type.value,
+            c.before or "",
+            c.after or "",
+            c.cost_direction or "",
+        ),
+    )
+
+
+def _month_problem(conn: sqlite3.Connection, *wanted: str) -> bool:
+    loaded = months(conn)
+    return any(m not in loaded for m in wanted)
+
+
+def filter_changes(
+    rows: list[GoldChange],
+    *,
+    change_types: list[str] | None = None,
+    formulary_ids: list[str] | None = None,
+    rxcuis: list[str] | None = None,
+    tier_from: int | None = None,
+    tier_to: int | None = None,
+) -> list[GoldChange]:
+    types = {ChangeType(t) for t in change_types or []}
+    forms = set(formulary_ids or [])
+    wanted = set(rxcuis or [])
+    return [
+        r
+        for r in rows
+        if (not types or r.change_type in types)
+        and (not forms or r.formulary_from in forms or r.formulary_to in forms)
+        and (not wanted or r.rxcui in wanted)
+        and (tier_from is None or r.tier_before == tier_from)
+        and (tier_to is None or r.tier_after == tier_to)
+    ]
+
+
+def _scope_formularies(
+    conn: sqlite3.Connection, args: dict[str, Any], month_to: str
+) -> list[str] | None:
+    if args.get("plan_id"):
+        formulary = plan_formulary(conn, str(args["plan_id"]), month_to)
+        if formulary is None:
+            raise GoldError(f"plan {args['plan_id']} not in {month_to}")
+        return [formulary]
+    if args.get("formulary_id"):
+        return [str(args["formulary_id"])]
+    if args.get("formulary_ids"):
+        return [str(f) for f in args["formulary_ids"]]
+    return None
+
+
+def _drug_list(conn: sqlite3.Connection, rxcuis: set[str]) -> StructuredAnswer:
+    if not rxcuis:
+        return NoDataAnswer(reason=NoDataReason.no_matching_changes)
+    ordered = sorted(rxcuis)
+    return DrugListAnswer(rxcuis=ordered, display_names=full_names(conn, ordered))
+
+
+def _pair(conn: sqlite3.Connection, args: dict[str, Any]) -> tuple[str, str]:
+    return resolve_month(conn, str(args["from"])), resolve_month(conn, str(args["to"]))
+
+
+def filtered_changes(conn: sqlite3.Connection, args: dict[str, Any]) -> list[GoldChange]:
+    month_from, month_to = _pair(conn, args)
+    return filter_changes(
+        changes(conn, month_from, month_to),
+        change_types=args.get("change_types"),
+        formulary_ids=_scope_formularies(conn, args, month_to),
+        rxcuis=args.get("rxcuis"),
+        tier_from=args.get("tier_from"),
+        tier_to=args.get("tier_to"),
+    )
+
+
+def drug_change(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
+    month_from, month_to = _pair(conn, args)
+    if _month_problem(conn, month_from, month_to):
+        return NoDataAnswer(reason=NoDataReason.month_not_loaded)
+    rxcuis = sorted(str(r) for r in args["rxcuis"])
+    rows = filtered_changes(conn, {**args, "rxcuis": rxcuis})
+    if not rows:
+        return NoDataAnswer(reason=NoDataReason.no_matching_changes)
+    items = sorted(
+        {
+            ChangeItem(
+                rxcui=r.rxcui,
+                formulary_id=r.formulary_to,
+                change_type=r.change_type,
+                before=r.before,
+                after=r.after,
+            )
+            for r in rows
+        },
+        key=lambda i: (i.rxcui, i.formulary_id, i.change_type.value),
+    )
+    return ChangeAnswer(rxcuis=rxcuis, items=items)
+
+
+def filtered_list(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
+    month_from, month_to = _pair(conn, args)
+    if _month_problem(conn, month_from, month_to):
+        return NoDataAnswer(reason=NoDataReason.month_not_loaded)
+    return _drug_list(conn, {r.rxcui for r in filtered_changes(conn, args)})
+
+
+def count_drugs(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
+    month_from, month_to = _pair(conn, args)
+    if _month_problem(conn, month_from, month_to):
+        return NoDataAnswer(reason=NoDataReason.month_not_loaded)
+    rows = filtered_changes(conn, args)
+    if not rows:
+        return NoDataAnswer(reason=NoDataReason.no_matching_changes)
+    return CountAnswer(count=len({r.rxcui for r in rows}), unit="drugs")
+
+
+def over_cap(conn: sqlite3.Connection, args: dict[str, Any]) -> tuple[CountAnswer, DrugListAnswer]:
+    """A list too long for one tool call: the drug count, and the full list,
+    which also counts as correct if a runner pages through all of it."""
+    found = sorted({r.rxcui for r in filtered_changes(conn, args)})
+    if not found:
+        raise GoldError("over_cap needs a non-empty answer")
+    full = DrugListAnswer(
+        rxcuis=found, display_names=full_names(conn, found), total=len(found), truncated=False
+    )
+    return CountAnswer(count=len(found), unit="drugs"), full
+
+
+def class_changes(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
+    """Drugs whose names contain a word (a drug class like 'insulin') that changed."""
+    month_from, month_to = _pair(conn, args)
+    members = rxcuis_with_token(conn, str(args["class_token"]))
+    rows = filtered_changes(conn, {**args, "rxcuis": members})
+    found = {r.rxcui for r in rows}
+    if not found:
+        return NoDataAnswer(reason=NoDataReason.no_matching_changes)
+    answer = _drug_list(conn, found)
+    if not args.get("with_tiers"):
+        return answer
+    formulary = _scope_formularies(conn, args, month_to)
+    assert formulary is not None and len(formulary) == 1
+    tiers: dict[str, int] = {}
+    for rxcui in sorted(found):
+        state = coverage_state(conn, rxcui, month_to, formulary[0])
+        if state is not None:
+            tiers[rxcui] = state.tier
+    assert isinstance(answer, DrugListAnswer)
+    return answer.model_copy(update={"tiers": tiers})
+
+
+def changes_where_coverage(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
+    """Changed drugs whose coverage in the later month passes a test."""
+    _, month_to = _pair(conn, args)
+    rows = filtered_changes(conn, args)
+    formularies = _scope_formularies(conn, args, month_to)
+    target = str(args.get("coverage_formulary_id") or (formularies or [""])[0])
+    test: dict[str, Any] = dict(args["coverage"])
+    keep: set[str] = set()
+    for rxcui in sorted({r.rxcui for r in rows}):
+        state = coverage_state(conn, rxcui, month_to, target)
+        if "covered" in test and (state is not None) != bool(test["covered"]):
+            continue
+        if state is None and any(k != "covered" for k in test):
+            continue
+        if state is not None and any(
+            getattr(state, k) != v for k, v in test.items() if k != "covered"
+        ):
+            continue
+        keep.add(rxcui)
+    return _drug_list(conn, keep)
+
+
+def changes_intersection(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAnswer:
+    """Drugs that carry every one of several change types."""
+    sets = [
+        {r.rxcui for r in filtered_changes(conn, {**args, "change_types": [t]})}
+        for t in args["all_of"]
+    ]
+    return _drug_list(conn, set.intersection(*sets) if sets else set())
+
+
+# Cost, priced again from the raw beneficiary cost rows
+
+_CHANNELS = ("pref", "nonpref", "mail_pref", "mail_nonpref")
+
+
+def _tier_cost(
+    conn: sqlite3.Connection, config: Config, month: str, plan_id: str, tier: int | None
+) -> tuple[float, float] | None:
+    if tier is None:
+        return None
+    contract, plan, segment = plan_key(plan_id)
+    rows = conn.execute(
+        "SELECT * FROM beneficiary_cost WHERE snapshot_month = ? AND contract_id = ? "
+        "AND plan_id = ? AND segment_id = ? AND coverage_level = ? AND tier = ?",
+        (month, contract, plan, segment, config.impact.coverage_level, tier),
+    ).fetchall()
+    lows: list[float] = []
+    highs: list[float] = []
+    for row in rows:
+        days = config.codes.days_supply[str(row["days_supply"])].days
+        if days is None:
+            continue
+        scale = config.impact.normalize_days / days
+        for channel in _CHANNELS:
+            code = str(row[f"cost_type_{channel}"] or "")
+            if not code:
+                continue
+            kind = config.codes.cost_type[code].kind
+            if kind == "copay" and row[f"cost_amt_{channel}"] is not None:
+                value = float(row[f"cost_amt_{channel}"]) * scale
+                lows.append(value)
+                highs.append(value)
+            elif kind == "coinsurance":
+                bounds = [
+                    float(v)
+                    for v in (row[f"cost_min_amt_{channel}"], row[f"cost_max_amt_{channel}"])
+                    if v
+                ]
+                if bounds:
+                    lows.append(min(bounds) * scale)
+                    highs.append(max(bounds) * scale)
+    if not lows:
+        return None
+    return min(lows), max(highs)
+
+
+def _plans_in_scope(
+    conn: sqlite3.Connection, month_from: str, month_to: str, args: dict[str, Any]
+) -> list[tuple[str, str, str]]:
+    rows = [
+        (str(p), str(a), str(b))
+        for p, a, b in conn.execute(_PAIRS_SQL, {"m_from": month_from, "m_to": month_to}).fetchall()
+    ]
+    if args.get("plan_id"):
+        wanted = "-".join(plan_key(str(args["plan_id"])))
+        return [r for r in rows if r[0] == wanted]
+    formulary = str(args["formulary_id"])
+    return sorted(r for r in rows if formulary in (r[1], r[2]))
+
+
+def cost_change(conn: sqlite3.Connection, config: Config, args: dict[str, Any]) -> StructuredAnswer:
+    month_from, month_to = _pair(conn, args)
+    if _month_problem(conn, month_from, month_to):
+        return NoDataAnswer(reason=NoDataReason.month_not_loaded)
+    rxcui = str(args["rxcui"])
+    lows: list[float] = []
+    highs: list[float] = []
+    covered = False
+    for plan, f_from, f_to in _plans_in_scope(conn, month_from, month_to, args):
+        before = coverage_state(conn, rxcui, month_from, f_from)
+        after = coverage_state(conn, rxcui, month_to, f_to)
+        if before is None and after is None:
+            continue
+        covered = True
+        tier_before = before.tier if before else None
+        tier_after = after.tier if after else None
+        if tier_before == tier_after:
+            lows.append(0.0)
+            highs.append(0.0)
+            continue
+        if tier_before is None or tier_after is None:
+            raise GoldError("open ended cost changes are not used as gold items")
+        cost_before = _tier_cost(conn, config, month_from, plan, tier_before)
+        cost_after = _tier_cost(conn, config, month_to, plan, tier_after)
+        if cost_before is None or cost_after is None:
+            continue
+        low = round(cost_after[0] - cost_before[1], 2)
+        high = round(cost_after[1] - cost_before[0], 2)
+        lows.append(min(low, high))
+        highs.append(max(low, high))
+    if not covered:
+        return NoDataAnswer(reason=NoDataReason.not_on_formulary)
+    if not lows:
+        raise GoldError(f"RXCUI {rxcui} is not priced in this scope")
+    return CostRangeAnswer(rxcui=rxcui, low=min(lows), high=max(highs))
+
+
+# Clarify
+
+
+def clarify(conn: sqlite3.Connection, args: dict[str, Any]) -> tuple[ClarifyAnswer, ChangeAnswer]:
+    """The candidates an ambiguous name stands for, and the full answer for all of them."""
+    rxcuis = sorted(str(r) for r in args["rxcuis"])
+    by_product: dict[str, list[str]] = defaultdict(list)
+    for rxcui in rxcuis:
+        by_product[product_of(conn, rxcui)].append(rxcui)
+    candidates = [
+        ClarifyCandidate(product=p, rxcuis=sorted(r)) for p, r in sorted(by_product.items())
+    ]
+    full = drug_change(conn, {**args, "rxcuis": rxcuis})
+    alternative = full if isinstance(full, ChangeAnswer) else ChangeAnswer(rxcuis=rxcuis, items=[])
+    return ClarifyAnswer(candidates=candidates), alternative
+
+
+# Dispatch
+
+
+def evaluate(conn: sqlite3.Connection, config: Config, query: str, args: dict[str, Any]) -> Any:
+    """Run one gold query. Returns a StructuredAnswer, or for clarify a pair."""
+    if query == "coverage":
+        return coverage(
+            conn,
+            str(args["rxcui"]),
+            str(args["month"]),
+            formulary_id=args.get("formulary_id"),
+            plan_id=args.get("plan_id"),
+        )
+    if query == "drug_change":
+        return drug_change(conn, args)
+    if query == "filtered_list":
+        return filtered_list(conn, args)
+    if query == "count_drugs":
+        return count_drugs(conn, args)
+    if query == "over_cap":
+        return over_cap(conn, args)
+    if query == "cost_change":
+        return cost_change(conn, config, args)
+    if query == "class_changes":
+        return class_changes(conn, args)
+    if query == "changes_where_coverage":
+        return changes_where_coverage(conn, args)
+    if query == "changes_intersection":
+        return changes_intersection(conn, args)
+    if query == "unknown_drug":
+        return NoDataAnswer(reason=NoDataReason.unknown_drug)
+    if query == "month_not_loaded":
+        if not _month_problem(conn, *[str(m) for m in args["months"]]):
+            raise GoldError(f"months {args['months']} are all loaded")
+        return NoDataAnswer(reason=NoDataReason.month_not_loaded)
+    if query == "refusal":
+        return RefusalAnswer(reason=args.get("reason", "medical_advice"))
+    if query == "clarify":
+        return clarify(conn, args)
+    raise GoldError(f"unknown gold query {query}")
+
+
+def describe(query: str, args: dict[str, Any]) -> str:
+    """The human readable gold_query string stored on each item."""
+    parts = []
+    for key in sorted(args):
+        value = args[key]
+        if isinstance(value, list):
+            value = "[" + ",".join(str(v) for v in value) + "]"
+        elif isinstance(value, dict):
+            value = "{" + ",".join(f"{k}:{v}" for k, v in sorted(value.items())) + "}"
+        parts.append(f"{key}={value}")
+    return f"{query}({','.join(parts)})"

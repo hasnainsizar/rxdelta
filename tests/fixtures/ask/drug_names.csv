@@ -1,0 +1,188 @@
+rxcui,name_type,name
+8800101,full,semaglutide 0.25 MG in 0.19 ML Pen Injector [Ozempic]
+8800101,ingredient,semaglutide
+8800101,brand,Ozempic
+8800102,full,semaglutide 1 MG in 0.75 ML Pen Injector [Ozempic]
+8800102,ingredient,semaglutide
+8800102,brand,Ozempic
+8800103,full,semaglutide 2 MG in 0.75 ML Pen Injector [Ozempic]
+8800103,ingredient,semaglutide
+8800103,brand,Ozempic
+8800111,full,semaglutide 2.4 MG in 0.75 ML Auto-Injector [Wegovy]
+8800111,ingredient,semaglutide
+8800111,brand,Wegovy
+8800121,full,tirzepatide 5 MG in 0.5 ML Auto-Injector [Mounjaro]
+8800121,ingredient,tirzepatide
+8800121,brand,Mounjaro
+8800122,full,tirzepatide 10 MG in 0.5 ML Auto-Injector [Mounjaro]
+8800122,ingredient,tirzepatide
+8800122,brand,Mounjaro
+8800131,full,dulaglutide 1.5 MG in 0.5 ML Pen Injector [Trulicity]
+8800131,ingredient,dulaglutide
+8800131,brand,Trulicity
+8800141,full,apixaban 5 MG Oral Tablet [Eliquis]
+8800141,ingredient,apixaban
+8800141,brand,Eliquis
+8800151,full,sitagliptin 100 MG Oral Tablet [Januvia]
+8800151,ingredient,sitagliptin
+8800151,brand,Januvia
+8800161,full,empagliflozin 10 MG Oral Tablet [Jardiance]
+8800161,ingredient,empagliflozin
+8800161,brand,Jardiance
+8800171,full,dapagliflozin 10 MG Oral Tablet [Farxiga]
+8800171,ingredient,dapagliflozin
+8800171,brand,Farxiga
+8800181,full,metformin hydrochloride 500 MG Oral Tablet
+8800181,ingredient,metformin
+8800182,full,metformin hydrochloride 1000 MG Oral Tablet
+8800182,ingredient,metformin
+8800191,full,insulin lispro 100 UNT/ML Injectable Solution [Humalog]
+8800191,ingredient,insulin lispro
+8800191,brand,Humalog
+8800192,full,"insulin lispro protamine, human 75 UNT/ML / insulin lispro 25 UNT/ML Injectable Suspension [Humalog Mix 75/25]"
+8800192,ingredient,"insulin lispro protamine, human"
+8800192,ingredient,insulin lispro
+8800192,brand,Humalog Mix 75/25
+8800201,full,insulin glargine 100 UNT/ML Pen Injector [Lantus]
+8800201,ingredient,insulin glargine
+8800201,brand,Lantus
+8800211,full,insulin aspart 100 UNT/ML Injectable Solution [Novolog]
+8800211,ingredient,insulin aspart
+8800211,brand,Novolog
+8800221,full,insulin degludec 100 UNT/ML Pen Injector [Tresiba]
+8800221,ingredient,insulin degludec
+8800221,brand,Tresiba
+8800231,full,insulin glargine 100 UNT/ML Pen Injector [Basaglar]
+8800231,ingredient,insulin glargine
+8800231,brand,Basaglar
+8800241,full,rivaroxaban 20 MG Oral Tablet [Xarelto]
+8800241,ingredient,rivaroxaban
+8800241,brand,Xarelto
+8800251,full,sacubitril 97 MG / valsartan 103 MG Oral Tablet [Entresto]
+8800251,ingredient,sacubitril
+8800251,ingredient,valsartan
+8800251,brand,Entresto
+8800261,full,atorvastatin 40 MG Oral Tablet
+8800261,ingredient,atorvastatin
+8800271,full,lisinopril 10 MG Oral Tablet
+8800271,ingredient,lisinopril
+8800281,full,amlodipine 5 MG Oral Tablet
+8800281,ingredient,amlodipine
+8800291,full,levothyroxine sodium 0.05 MG Oral Tablet
+8800291,ingredient,levothyroxine
+8800292,full,levothyroxine sodium 0.05 MG Oral Tablet [Synthroid]
+8800292,ingredient,levothyroxine
+8800292,brand,Synthroid
+8800301,full,omeprazole 20 MG Delayed Release Oral Capsule
+8800301,ingredient,omeprazole
+8800311,full,sertraline 50 MG Oral Tablet
+8800311,ingredient,sertraline
+8800321,full,gabapentin 300 MG Oral Capsule
+8800321,ingredient,gabapentin
+8800331,full,adalimumab 40 MG in 0.4 ML Pen Injector [Humira]
+8800331,ingredient,adalimumab
+8800331,brand,Humira
+8800341,full,etanercept 50 MG/ML Auto-Injector [Enbrel]
+8800341,ingredient,etanercept
+8800341,brand,Enbrel
+8800351,full,dupilumab 300 MG in 2 ML Pen Injector [Dupixent]
+8800351,ingredient,dupilumab
+8800351,brand,Dupixent
+8800361,full,albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [ProAir]
+8800361,ingredient,albuterol
+8800361,brand,ProAir
+8800362,full,albuterol 0.09 MG/ACTUAT Metered Dose Inhaler
+8800362,ingredient,albuterol
+8800371,full,budesonide 0.16 MG/ACTUAT / formoterol 0.0045 MG/ACTUAT Metered Dose Inhaler [Symbicort]
+8800371,ingredient,budesonide
+8800371,ingredient,formoterol
+8800371,brand,Symbicort
+8800381,full,linaclotide 145 MCG Oral Capsule [Linzess]
+8800381,ingredient,linaclotide
+8800381,brand,Linzess
+8800391,full,cariprazine 1.5 MG Oral Capsule [Vraylar]
+8800391,ingredient,cariprazine
+8800391,brand,Vraylar
+8800401,full,cyclosporine 0.5 MG/ML Ophthalmic Emulsion [Restasis]
+8800401,ingredient,cyclosporine
+8800401,brand,Restasis
+8800411,full,ticagrelor 90 MG Oral Tablet [Brilinta]
+8800411,ingredient,ticagrelor
+8800411,brand,Brilinta
+8800421,full,semaglutide 7 MG Oral Tablet [Rybelsus]
+8800421,ingredient,semaglutide
+8800421,brand,Rybelsus
+8800431,full,liraglutide 6 MG/ML Pen Injector [Victoza]
+8800431,ingredient,liraglutide
+8800431,brand,Victoza
+8800441,full,fluticasone furoate 0.1 MG/ACTUAT / umeclidinium 0.0625 MG/ACTUAT / vilanterol 0.025 MG/ACTUAT Dry Powder Inhaler [Trelegy Ellipta]
+8800441,ingredient,fluticasone furoate
+8800441,ingredient,umeclidinium
+8800441,ingredient,vilanterol
+8800441,brand,Trelegy Ellipta
+8800451,full,tirzepatide 5 MG in 0.5 ML Auto-Injector [Zepbound]
+8800451,ingredient,tirzepatide
+8800451,brand,Zepbound
+8800461,full,palbociclib 125 MG Oral Capsule [Ibrance]
+8800461,ingredient,palbociclib
+8800461,brand,Ibrance
+8800471,full,enzalutamide 40 MG Oral Capsule [Xtandi]
+8800471,ingredient,enzalutamide
+8800471,brand,Xtandi
+8800481,full,losartan potassium 50 MG Oral Tablet
+8800481,ingredient,losartan
+8800491,full,rosuvastatin calcium 10 MG Oral Tablet
+8800491,ingredient,rosuvastatin
+8800492,full,rosuvastatin calcium 10 MG Oral Tablet [Crestor]
+8800492,ingredient,rosuvastatin
+8800492,brand,Crestor
+100001,full,fixture compound 01 10 MG Oral Tablet
+100001,ingredient,fixture compound 01
+100002,full,fixture compound 02 10 MG Oral Tablet
+100002,ingredient,fixture compound 02
+100003,full,fixture compound 03 10 MG Oral Tablet
+100003,ingredient,fixture compound 03
+100004,full,fixture compound 04 10 MG Oral Tablet
+100004,ingredient,fixture compound 04
+100005,full,fixture compound 05 10 MG Oral Tablet
+100005,ingredient,fixture compound 05
+100006,full,fixture compound 06 10 MG Oral Tablet
+100006,ingredient,fixture compound 06
+100007,full,fixture compound 07 10 MG Oral Tablet
+100007,ingredient,fixture compound 07
+100008,full,fixture compound 08 10 MG Oral Tablet
+100008,ingredient,fixture compound 08
+100009,full,fixture compound 09 10 MG Oral Tablet
+100009,ingredient,fixture compound 09
+100010,full,fixture compound 10 10 MG Oral Tablet
+100010,ingredient,fixture compound 10
+100011,full,fixture compound 11 10 MG Oral Tablet
+100011,ingredient,fixture compound 11
+100012,full,fixture compound 12 10 MG Oral Tablet
+100012,ingredient,fixture compound 12
+100013,full,fixture compound 13 10 MG Oral Tablet
+100013,ingredient,fixture compound 13
+100014,full,fixture compound 14 10 MG Oral Tablet
+100014,ingredient,fixture compound 14
+100015,full,fixture compound 15 10 MG Oral Tablet
+100015,ingredient,fixture compound 15
+100016,full,fixture compound 16 10 MG Oral Tablet
+100016,ingredient,fixture compound 16
+100017,full,fixture compound 17 10 MG Oral Tablet
+100017,ingredient,fixture compound 17
+100018,full,fixture compound 18 10 MG Oral Tablet
+100018,ingredient,fixture compound 18
+500001,full,swap compound 1 5 MG Oral Tablet
+500001,ingredient,swap compound 1
+500002,full,swap compound 2 5 MG Oral Tablet
+500002,ingredient,swap compound 2
+500003,full,swap compound 3 5 MG Oral Tablet
+500003,ingredient,swap compound 3
+500004,full,swap compound 4 5 MG Oral Tablet
+500004,ingredient,swap compound 4
+500011,full,cost compound 11 5 MG Oral Tablet
+500011,ingredient,cost compound 11
+500012,full,cost compound 12 5 MG Oral Tablet
+500012,ingredient,cost compound 12
+500013,full,cost compound 13 5 MG Oral Tablet
+500013,ingredient,cost compound 13

@@ -7,11 +7,15 @@ never touches a raw dict or a magic number.
 
 from __future__ import annotations
 
+import hashlib
+import math
 import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypeVar
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from rxdelta.types import ConfigError
 
@@ -156,6 +160,127 @@ class NamesConfig:
     progress_every: int
 
 
+class _Section(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class MatchConfig(_Section):
+    fuzzy_threshold: float = Field(ge=0, le=100)
+    near_miss_floor: float = Field(ge=0, le=100)
+    near_miss_limit: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _floor_below_threshold(self) -> MatchConfig:
+        if self.near_miss_floor > self.fuzzy_threshold:
+            raise ValueError("near_miss_floor must not exceed fuzzy_threshold")
+        return self
+
+
+ToolName = Literal["find_drug", "find_plan", "get_coverage", "get_changes", "count_changes"]
+
+
+class ToolsConfig(_Section):
+    default_page_size: int = Field(ge=1)
+    row_caps: dict[ToolName, int]
+
+    @model_validator(mode="after")
+    def _caps(self) -> ToolsConfig:
+        if any(cap < 1 for cap in self.row_caps.values()):
+            raise ValueError("every row cap must be at least 1")
+        missing = set(ToolName.__args__) - set(self.row_caps)  # type: ignore[attr-defined]
+        if missing:
+            raise ValueError(f"row_caps is missing {', '.join(sorted(missing))}")
+        return self
+
+    def cap(self, tool: ToolName) -> int:
+        return self.row_caps[tool]
+
+
+Category = Literal[
+    "coverage_lookup",
+    "drug_change",
+    "filtered_list",
+    "count",
+    "over_cap",
+    "cost",
+    "multi_step",
+    "no_answer",
+    "ambiguous",
+    "out_of_scope",
+    "typo",
+]
+CATEGORIES: tuple[Category, ...] = Category.__args__  # type: ignore[attr-defined]
+
+
+def _sums_to_one(values: dict[str, float], where: str) -> None:
+    if any(v < 0 for v in values.values()):
+        raise ValueError(f"{where} shares must not be negative")
+    if not math.isclose(sum(values.values()), 1.0, abs_tol=1e-9):
+        raise ValueError(f"{where} shares must sum to 1, got {sum(values.values()):g}")
+
+
+class DifficultyRules(_Section):
+    medium_min_tools: int = Field(ge=1)
+    hard_min_tools: int = Field(ge=1)
+    medium_min_list: int = Field(ge=1)
+    hard_min_list: int = Field(ge=1)
+    typo_lifts: bool
+
+
+class SplitRatios(_Section):
+    dev: float
+    test: float
+
+    @model_validator(mode="after")
+    def _sum(self) -> SplitRatios:
+        _sums_to_one({"dev": self.dev, "test": self.test}, "[evalset.splits]")
+        return self
+
+
+NoAnswerKind = Literal[
+    "no_matching_changes", "not_on_formulary", "unknown_drug", "month_not_loaded"
+]
+
+
+class EvalsetConfig(_Section):
+    builder_version: str
+    id_share: float = Field(ge=0, le=1)
+    cost_tier_move_share: float = Field(ge=0, le=1)
+    typo_spill_share: float = Field(ge=0, le=1)
+    typo_attempts: int = Field(ge=1)
+    attempts_per_item: int = Field(ge=1)
+    max_list_items: int = Field(ge=1)
+    mix: dict[Category, float]
+    no_answer_mix: dict[NoAnswerKind, float]
+    splits: SplitRatios
+    difficulty: DifficultyRules
+
+    @model_validator(mode="after")
+    def _mix(self) -> EvalsetConfig:
+        _sums_to_one({str(k): v for k, v in self.mix.items()}, "[evalset.mix]")
+        missing = set(CATEGORIES) - set(self.mix)
+        if missing:
+            raise ValueError(f"[evalset.mix] is missing {', '.join(sorted(missing))}")
+        _sums_to_one({str(k): v for k, v in self.no_answer_mix.items()}, "[evalset.no_answer_mix]")
+        return self
+
+
+class DownloadConfig(_Section):
+    catalog_url: str
+    dataset_title: str
+    request_timeout_seconds: float = Field(gt=0)
+    max_retries: int = Field(ge=0)
+    read_block_bytes: int = Field(ge=4096)
+
+
+class EvalConfig(_Section):
+    cost_tolerance: float = Field(ge=0)
+    min_accuracy: float = Field(ge=0, le=1)
+    max_missed_refusal_rate: float = Field(ge=0, le=1)
+    workers: int = Field(ge=1)
+    worst_items: int = Field(ge=1)
+
+
 @dataclass(frozen=True)
 class Config:
     path: Path
@@ -167,6 +292,16 @@ class Config:
     severity: SeverityConfig
     report: ReportConfig
     names: NamesConfig
+    match: MatchConfig
+    tools: ToolsConfig
+    evalset: EvalsetConfig
+    eval: EvalConfig
+    download: DownloadConfig
+
+    @property
+    def sha256(self) -> str:
+        """Hash of the config file bytes, recorded next to eval results."""
+        return hashlib.sha256(self.path.read_bytes()).hexdigest()
 
     def resolve(self, relative: str) -> Path:
         """Resolve a config-relative path against the repo, not the caller cwd."""
@@ -425,6 +560,20 @@ def _parse_names(data: dict[str, Any]) -> NamesConfig:
     )
 
 
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def _parse_model(data: dict[str, Any], model: type[_ModelT], *path: str) -> _ModelT:
+    where = ".".join(path)
+    try:
+        return model.model_validate(_section(data, *path))
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(p) for p in err['loc']) or where}: {err['msg']}" for err in exc.errors()
+        )
+        raise ConfigError(f"Invalid config section [{where}]: {problems}") from exc
+
+
 def _parse_severity_bands(section: dict[str, Any]) -> tuple[SeverityBand, ...]:
     raw = section.get("severity_bands")
     if not isinstance(raw, list) or not raw:
@@ -480,6 +629,11 @@ def load_config(path: Path | None = None) -> Config:
         severity=_parse_severity(data),
         report=_parse_report(data),
         names=_parse_names(data),
+        match=_parse_model(data, MatchConfig, "names", "match"),
+        tools=_parse_model(data, ToolsConfig, "tools"),
+        evalset=_parse_model(data, EvalsetConfig, "evalset"),
+        eval=_parse_model(data, EvalConfig, "eval"),
+        download=_parse_model(data, DownloadConfig, "source", "download"),
     )
 
 

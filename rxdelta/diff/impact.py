@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from rxdelta.config import Config
 from rxdelta.db import queries
+from rxdelta.diff.cost_direction import CostDirection, directions, net_direction
 from rxdelta.diff.engine import DiffResult, DrugPlanChange
 from rxdelta.types import ChangeType, CostRow, PlanKey
 
@@ -114,6 +115,9 @@ class ChangeGroup:
     plan_names: tuple[str, ...]
     impact: ImpactRange
     severity: float
+    # For a tier move: whether the member pays more, less or the same. None for
+    # a group that moved no tier.
+    cost_direction: CostDirection | None = None
 
     @property
     def plan_count(self) -> int:
@@ -295,18 +299,22 @@ def build_groups(conn: sqlite3.Connection, config: Config, result: DiffResult) -
             cost_memo[key] = hit
         return hit
 
+    # Plans on one change can price the two tiers differently, so a group holds
+    # only plans whose cost moved the same way.
     buckets: dict[
-        tuple[str, tuple[ChangeType, ...], int | None, int | None], list[DrugPlanChange]
+        tuple[str, tuple[ChangeType, ...], int | None, int | None, CostDirection | None],
+        list[DrugPlanChange],
     ] = defaultdict(list)
-    for change in result.changes:
-        buckets[(change.ndc_11, change.change_types, change.tier_before, change.tier_after)].append(
-            change
-        )
+    costs = directions(conn, config, result, (costs_from, costs_to))
+    for change, cost in zip(result.changes, costs, strict=True):
+        buckets[
+            (change.ndc_11, change.change_types, change.tier_before, change.tier_after, cost)
+        ].append(change)
 
     groups: list[ChangeGroup] = []
-    for (ndc, change_types, tier_before, tier_after), members in buckets.items():
+    for (ndc, change_types, tier_before, tier_after, cost), members in buckets.items():
         open_ended = bool({ChangeType.DRUG_ADDED, ChangeType.DRUG_REMOVED} & set(change_types))
-        direction = members[0].net_direction
+        direction = net_direction(change_types, cost)
         per_plan = [
             estimate_impact(
                 priced(0, costs_from, c.plan, tier_before),
@@ -333,6 +341,7 @@ def build_groups(conn: sqlite3.Connection, config: Config, result: DiffResult) -
                 severity=severity_score(
                     config, impact, len(plans), adds_restriction=members[0].adds_restriction
                 ),
+                cost_direction=cost,
             )
         )
 

@@ -153,7 +153,7 @@ def build_rows(config: Config, groups: list[ChangeGroup]) -> list[ReportRow]:
                 has_name=bool(group.drug_name),
                 ndc=fmt.ndc_display(group.ndc_11),
                 rxcui=group.rxcui,
-                change_types=fmt.change_types(group.change_types),
+                change_types=fmt.change_label(group),
                 plan_count=group.plan_count,
                 plan_examples=examples,
                 impact=fmt.impact_range(group.impact),

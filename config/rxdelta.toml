@@ -29,6 +29,20 @@ encoding = "cp1252"
 # patterns, which would be more fragile.
 exclude_dir_patterns = ["sample files*", "__MACOSX"]
 
+# Where `rxdelta fetch-cms` finds a release. The monthly files moved from cms.gov
+# to data.cms.gov; its catalog lists every release's archive URL.
+[source.download]
+# The data.cms.gov catalog, a JSON list of every dataset and its files.
+catalog_url = "https://data.cms.gov/data.json"
+# Dataset titles start with this, then the release date.
+dataset_title = "Monthly Prescription Drug Plan Formulary and Pharmacy Network Information"
+# Seconds before one request is abandoned and retried.
+request_timeout_seconds = 120.0
+# Retries after a network error or a 5xx, with doubling backoff.
+max_retries = 4
+# Bytes per range request when reading the remote archive.
+read_block_bytes = 8388608
+
 [source.files.formulary]
 patterns = ["basic drugs formulary file*", "formulary*"]
 
@@ -202,7 +216,113 @@ cache_path = "data/reference/drug_names.csv"
 api_base = "https://rxnav.nlm.nih.gov/REST"
 # RxNav asks for no more than 20 requests per second per IP. This is well under.
 requests_per_second = 8.0
+# Seconds before one request to RxNav is abandoned and retried.
 request_timeout_seconds = 15.0
+# Retries after a network error, a 429 or a 5xx, with doubling backoff.
 max_retries = 3
 # RXCUIs per progress report while refreshing.
 progress_every = 100
+
+# ---------------------------------------------------------------------------
+# Question answering, phase 1: drug name matching, the tool layer, the eval
+# set builder and the eval harness. Nothing below changes load, diff or report.
+# ---------------------------------------------------------------------------
+
+[names.match]
+# Lowest rapidfuzz score, 0 to 100, at which a misspelled name still counts as
+# a match. "ozempik" scores about 86 against "ozempic".
+fuzzy_threshold = 85.0
+# Candidates scoring at or above this but below the threshold are listed as
+# near misses when a lookup finds nothing.
+near_miss_floor = 60.0
+# How many near misses an empty lookup lists.
+near_miss_limit = 5
+
+[tools]
+# Rows a list tool returns when the caller does not pass a limit.
+default_page_size = 25
+
+# Most rows any one call can return. Past this the result is marked truncated,
+# the full total is given, and the note says how to narrow the query.
+[tools.row_caps]
+# RXCUIs per name lookup.
+find_drug = 25
+# Plans per plan lookup.
+find_plan = 25
+# Formulary rows per coverage lookup.
+get_coverage = 50
+# Change rows per page.
+get_changes = 100
+# Groups per count; the totals always cover every group.
+count_changes = 100
+
+[evalset]
+# Bump when the builder changes in a way that changes its output.
+builder_version = "1.0"
+# Share of drug mentions written as an RXCUI or NDC instead of a name, to test
+# the identifier path. The share of misspelled items is the typo entry below.
+id_share = 0.08
+# Share of cost items that price a tier move; the rest have no tier change and
+# expect a zero change range.
+cost_tier_move_share = 0.8
+# Most of the no answer quota that misspellings matching nothing may fill.
+typo_spill_share = 0.25
+# Tries per misspelling before giving up on that base question.
+typo_attempts = 8
+# Candidate draws per wanted item before a category is reported short.
+attempts_per_item = 200
+# Largest drug list a list question may expect. A question whose answer is
+# thousands of drugs tests paging, not understanding.
+max_list_items = 50
+
+# Share of generated items per category. Must sum to 1.
+[evalset.mix]
+coverage_lookup = 0.10
+drug_change = 0.15
+filtered_list = 0.10
+count = 0.15
+# List questions whose answer is longer than get_changes returns in one call.
+over_cap = 0.05
+cost = 0.10
+multi_step = 0.10
+no_answer = 0.10
+ambiguous = 0.05
+out_of_scope = 0.05
+typo = 0.05
+
+# Kinds of no answer item. Weighted toward a real drug and real months where
+# the asked about change did not happen, which looks the most answerable.
+# Must sum to 1.
+[evalset.no_answer_mix]
+no_matching_changes = 0.40
+not_on_formulary = 0.25
+unknown_drug = 0.20
+month_not_loaded = 0.15
+
+# Stratified split per category. Must sum to 1.
+[evalset.splits]
+dev = 0.7
+test = 0.3
+
+# Difficulty is "easy" unless one of these rules lifts it. Hard wins over medium.
+[evalset.difficulty]
+# Minimum number of required tools for medium and for hard.
+medium_min_tools = 2
+hard_min_tools = 3
+# Minimum expected list size for medium and for hard.
+medium_min_list = 3
+hard_min_list = 6
+# A misspelled drug name lifts difficulty one level.
+typo_lifts = true
+
+[eval]
+# Absolute tolerance, in dollars, on each end of a cost range.
+cost_tolerance = 0.01
+# eval run exits nonzero when overall accuracy falls below this.
+min_accuracy = 0.80
+# eval run exits nonzero when the missed refusal rate rises above this.
+max_missed_refusal_rate = 0.05
+# Items run in parallel by default.
+workers = 4
+# Items listed in the report's worst items section.
+worst_items = 20

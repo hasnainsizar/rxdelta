@@ -693,7 +693,10 @@ th.num { text-align: right; }
     </div>
     <p class="note" style="margin: var(--s-4) 0 0">
       A group is one drug with one combination of changes and one tier movement, counted across
-      every plan it affects. Severity is a 0 to 100 sorting score combining the size of the range,
+      every plan it affects. A tier move is labelled by what it does to the member's cost, read from
+      the cost sharing the plan publishes for the two tiers, not by the tier number: a move to a
+      higher numbered tier can cost less, and where the plan publishes no comparable cost the row
+      says so. Severity is a 0 to 100 sorting score combining the size of the range,
       its direction, how many plans it reaches, and whether a utilization restriction was added.
       Bands: {% for band in severity_bands %}{{ band.label }} at {{ "%g"|format(band.min_score) }}{% if not loop.last %}, {% endif %}{% endfor %}.
       {% if not severity_summary.discriminates %}

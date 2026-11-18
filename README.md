@@ -132,6 +132,29 @@ $0.00 to $0.00. Those groups are now left unpriced and the report says so. The
 limitation always existed; against synthetic data, where the generator invented
 populated bounds, it never showed.
 
+**Package codes are swapped every month.** CMS lists one NDC per drug per
+formulary and changes which NDC that is from month to month. Compared NDC by NDC,
+each swap looked like the drug being dropped and re-added, and a tier move made
+in the same month was never seen at all. Between May and June 2026 that inflated
+the comparison to 1,030,491 changes in 1,367 groups; pairing the old and new NDC
+of the same drug leaves 222,989 changes in 686 groups. Between June and July it
+had hidden 4,666 tier decreases and all 208 tier increases, every one of them a
+dapagliflozin product whose brand NDCs were replaced by generic ones. The diff,
+the report, the question tools and the eval gold answers now share one rule for
+this, in `rxdelta/swaps.py`.
+
+**A higher tier number can cost less.** Tier numbers are labels CMS assigns, not
+prices. Comparing the cost sharing each plan publishes for the old tier against
+the new one, like for like, 200 of the 208 June to July tier increases cost the
+member less (the dapagliflozin products moving from tier 3 to tier 6, a $0 tier
+on most of those plans), 2 cost the same and 6 cannot be told from the published
+figures; none is confirmed to cost more. No tier decrease in any of the three
+month pairs costs more. Every tier move in `diff`, the report and the question
+tools now carries a `cost_direction` (higher, lower, same or unknown), the
+report labels and ranks tier moves by it, and `tier_up` and `tier_down` still say
+what CMS changed. "Unknown" means the plan publishes no comparable figure for one
+of the two tiers, typically coinsurance with no dollar bounds against a copay.
+
 **Two more shapes the fixtures never had.** The plan information file carries
 one row per plan **per county**, up to 387 rows for a single plan, so 95 percent
 of rows looked like duplicate keys. Identical repeats now collapse and are
@@ -153,8 +176,8 @@ Stated rather than smoothed over. None of these were adjusted away.
 - **104 groups share a severity of exactly 60.00.** A hard cluster on a round
   number suggests a term in the score is saturating or falling back to a default
   rather than varying. Not investigated. The formula was not touched to hide it.
-- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 79
-  percent of groups. Real changes cluster into a few archetypes, mostly mass
+- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 70
+  percent of groups (79 percent before package code swaps were paired). Real changes cluster into a few archetypes, mostly mass
   additions, mass removals and prior authorization added, so the score separates
   archetypes well and separates within them poorly.
 - **The layout change detection path has never been triggered by data.** May and
@@ -243,13 +266,18 @@ Synthetic fixtures, 25,000 formulary rows per month, best of three runs
 
 Real CMS months, 1,302,746 rows per month (`make cms-bench`):
 
-| Step | Before optimization | After |
-| --- | --- | --- |
-| Load 2026-05 | 16.54s | 17.18s |
-| Load 2026-06 | 16.73s | 15.38s |
-| Diff and score (1,030,491 changes, 1,367 groups) | 32.31s | 21.20s |
-| Render report | 0.70s | 0.64s |
-| **End to end** | **66.28s** | **54.39s** |
+| Step | Before optimization | After | With swap pairing |
+| --- | --- | --- | --- |
+| Load 2026-05 | 16.54s | 17.18s | 15.32s |
+| Load 2026-06 | 16.73s | 15.38s | 14.90s |
+| Diff and score | 32.31s | 21.20s | 6.60s |
+| Render report | 0.70s | 0.64s | 0.10s |
+| **End to end** | **66.28s** | **54.39s** | **36.91s** |
+
+The first two columns diffed 1,030,491 drug and plan changes in 1,367 groups.
+Pairing package code swaps (below) leaves 222,989 changes, which is most of why
+the last column is faster. They fall into 695 groups once groups are also split
+by what a tier move does to the member's cost.
 
 The diff got faster two ways: tier costs were being computed 2,060,982 times for
 about 38,000 distinct answers and are now memoized, and SQLite discards rows that
@@ -291,15 +319,30 @@ the terminal output and the HTML report so the two cannot drift apart.
 
 The real files are **not committed**. Two months unzipped are roughly 14GB, most
 of it the pharmacy networks file, and CMS redistributes them under an agreement
-for use. Download them from the CMS monthly public use files page:
+for use. CMS now publishes them on data.cms.gov as the "Monthly Prescription Drug
+Plan Formulary and Pharmacy Network Information" dataset; the old cms.gov page no
+longer exists. The catalog at <https://data.cms.gov/data.json> lists every
+release's archive URL:
 
-<https://www.cms.gov/data-research/statistics-trends-and-reports/prescription-drug-coverage-general-information/prescription-drug-plan-formulary-pharmacy-network-and-pricing-information-files>
+<https://data.cms.gov/provider-summary-by-type-of-service/medicare-part-d-prescribers/monthly-prescription-drug-plan-formulary-and-pharmacy-network-information>
 
-The two months this project was validated against are the **May 2026 release
-(`2026_20260513`)** and the **June 2026 release (`2026_20260610`)**. Unzip each
-under `data/YYYY-MM/`. The release nests every table in its own directory and the
-names contain double spaces; leave them exactly as CMS ships them, the loader
-walks the tree:
+The months this project is validated against are the **May 2026 release
+(`2026_20260513`)**, the **June 2026 release (`2026_20260610`)** and the **July
+2026 release (`2026_20260722`)**. Each archive is about 2.3GB, almost all of it
+the pharmacy networks file; rxdelta needs only the three small table archives
+inside it, about 10MB per month. `rxdelta fetch-cms` reads just those out of the
+remote archive, with HTTP range requests, and unpacks them where the loader
+expects them:
+
+```bash
+make cms-fetch                                 # the three releases below
+uv run rxdelta fetch-cms --release 2026_20260513   # or one release at a time
+```
+
+The release ID is the archive name; the month it belongs to comes from its date.
+Each release nests every table in its own directory and the names contain double
+spaces; they are kept exactly as CMS ships them, and the loader walks the tree.
+`SOURCE.json` next to them records the archive URL and each file's SHA-256:
 
 ```
 data/2026-05/2026_20260513/basic drugs formulary file  20260531/*.txt
@@ -312,7 +355,9 @@ geographic locator, indication based coverage and insulin beneficiary cost files
 are ignored, as is the `sample files` directory each release ships.
 
 ```bash
-make cms-load          # load both months
+make cms-fetch         # download the three months, only the tables read
+make cms-load          # load the three months into rxdelta-cms.db
+uv run rxdelta names fetch --db rxdelta-cms.db   # drug names from RxNav, about an hour
 make cms-distribution  # does the score discriminate on real data?
 make cms-example       # regenerate docs/example-report-cms.html
 ```
@@ -331,12 +376,118 @@ Tests run against small hand built fixture tables in `tests/fixtures/`, which
 follow the real CMS column layout. CI runs lint, typecheck, tests and the full
 synthetic demo on every push.
 
+## Asking questions (in progress)
+
+The goal is `rxdelta ask "did Ozempic get more expensive on my plan?"`: a plain
+English question in, an answer out, built only from the loaded data. That
+command does not exist yet. What exists is the groundwork it will stand on.
+
+rxdelta reports formulary data. It does not give medical advice.
+
+**Tools.** Seven small, read-only functions that look things up in the
+database: which months are loaded, find a drug by name (misspellings included),
+find a plan, show how a drug is covered, list or count changes between two
+months, and estimate what a tier move does to monthly cost. Each takes typed
+arguments, never writes to the database, and always says why when it finds
+nothing ("that month is not loaded", "no changes of that kind"). The question
+answering agent will call these instead of guessing.
+
+```bash
+uv run rxdelta tools list
+uv run rxdelta tool find_drug --args '{"query": "ozempik"}' --db rxdelta-cms.db --pretty
+uv run rxdelta tool get_changes --db rxdelta-cms.db --pretty \
+    --args '{"from_month": "2026-05", "to_month": "2026-07", "change_types": ["tier_down"], "formulary_ids": ["00026059"]}'
+uv run rxdelta tools schema --format anthropic   # tool definitions for the agent
+```
+
+**Drug names.** The CMS files identify drugs by code, so names come from NLM
+RxNav (`rxdelta names fetch`, the only command besides `names refresh` that uses
+the network), from a local RxNorm file (`rxdelta names load --rrf RXNCONSO.RRF`),
+or from a fixture (`rxdelta names load --fixture FILE`). `rxdelta names status`
+shows how many drugs have names. Each drug gets its full name, ingredients and
+brands, so "Ozempic", "semaglutide" and "semiglutide" all find it.
+
+**The eval sets.** Two sets of questions with correct answers worked out
+separately from the tools, straight from the tables. Both cover coverage
+lookups, changes for one drug, filtered lists, counts, cost, multi step
+questions, questions the data cannot answer, ambiguous drug names, medical
+advice that should be refused, and misspellings.
+
+- `evals/rxdelta_v1.jsonl`: 220 questions about the real May, June and July
+  2026 CMS releases. Running it needs the download and `rxdelta-cms.db`; its
+  manifest records the three release IDs, checked against the loaded files.
+- `evals/rxdelta_fixture_v1.jsonl`: 210 questions about the committed synthetic
+  fixtures. Tests and CI use it, because it rebuilds offline. It has no
+  `over_cap` questions, since no fixture answer outgrows a tool's row cap.
+
+Besides the categories above, both kinds of set include `over_cap` questions:
+lists too long for one tool call ("what are all the drugs that got dropped from
+June to July", 3,335 of them). The right answer is the count, or a partial list
+that says it is partial and gives the total.
+
+See [docs/eval-card.md](docs/eval-card.md) for what they measure and their
+limits.
+
+```bash
+make cms-fetch cms-load && uv run rxdelta names fetch --db rxdelta-cms.db
+make evalset        # rebuild evals/rxdelta_v1.jsonl from rxdelta-cms.db
+uv run rxdelta eval run --runner oracle --split dev     # real set, rxdelta-cms.db
+uv run rxdelta eval compare runs/<first run> runs/<second run>
+
+make evalset-fixture   # build evals.db from the fixtures and rebuild the fixture set
+uv run rxdelta eval run --set evals/rxdelta_fixture_v1.jsonl --db evals.db --runner oracle
+```
+
+Each run writes `runs/<time>_<runner>_<split>/` with every answer and score, a
+summary, an HTML report and a markdown table.
+
+**Why the eval came first.** An agent that answers health plan questions has to
+be measured before it is trusted, and every later change to the agent, a tool or
+the data has to be compared against the same yardstick. Building the eval before
+the agent means the first agent run already has a score, and every run after it
+shows exactly what got better and what broke.
+
+Two reference runs on the dev split of the real set. The **oracle** knows the
+correct tool calls and must score 100 percent; anything less would mean a bug in
+the tools, the answers or the scoring. The **null** runner always says it found
+nothing and sets the floor.
+
+Oracle:
+
+| metric | value |
+|---|---|
+| accuracy | 100.0% (155 of 155) |
+| mean F1, drug lists | 100.0% |
+| false refusals | 0 of 130 answerable |
+| missed refusals | 0 of 9 out of scope |
+| required tools called | 100.0% |
+| mean tool calls | 3.15 |
+| items with ungrounded numbers | 0 |
+
+Null:
+
+| metric | value |
+|---|---|
+| accuracy | 10.3% (16 of 155) |
+| mean F1, drug lists | n/a |
+| false refusals | 130 of 130 answerable |
+| missed refusals | 9 of 9 out of scope |
+| required tools called | 5.8% |
+| mean tool calls | 0.00 |
+| items with ungrounded numbers | 0 |
+
+The null runner's 10.3 percent is the share of questions whose correct answer
+is "the data has no answer". The oracle did not start at 100 percent on real
+data: the first run scored 96.5 percent, and the causes (NDC swaps hiding tier
+moves, brand names on generic drugs, repeated plan names, unpriced tiers) are
+recorded in part 6 of [DECISIONS.md](DECISIONS.md).
+
 ## More
 
 [docs/METHODOLOGY.md](docs/METHODOLOGY.md) explains the cost range, the modal
 case and the severity formula in plain English, with worked examples and the
 verified code tables. [DECISIONS.md](DECISIONS.md) records every judgment call
-and the evidence for it.
+and the evidence for it, with part 6 covering the question answering work.
 
 ## License
 

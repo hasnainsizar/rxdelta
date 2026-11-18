@@ -3,7 +3,7 @@
 Every judgment call made while building rxdelta, with the evidence behind it, so
 a reviewer can disagree with a specific choice rather than with the whole thing.
 
-It is organised as five parts, not as a diary:
+It is organised as six parts, not as a diary:
 
 1. **The domain and the data model.** What a Part D formulary comparison is and
    how it is stored.
@@ -16,6 +16,9 @@ It is organised as five parts, not as a diary:
    corrupting every number the project produced.
 5. **Incidents and open questions.** What went wrong operationally, and what is
    still unsettled.
+6. **Question answering.** The tool layer, the drug name layer, the eval set
+   and the eval harness that an `rxdelta ask` agent will be built on and
+   measured by.
 
 If you are reading one part, read part 4.
 
@@ -484,7 +487,9 @@ zero. Only 658 publish a maximum and 9 publish a minimum.
 A zero bound means no bound was published, not a bound of zero dollars. The
 estimator previously took a min and max of 0 at face value and would have priced
 a 25 percent coinsurance tier at exactly $0.00 to $0.00. That is now treated as
-unpriced. The visible consequence is that 286 of 1,367 real change groups carry
+unpriced. (These counts predate the pairing of package code swaps; see
+[package code swaps](#package-code-swaps-were-reported-as-drugs-dropped-and-re-added)
+for the current ones.) The visible consequence is that 286 of 1,367 real change groups carry
 no price at all and 647 have no modal case, which the report states rather than
 filling in. This limitation always existed; on synthetic data, where the
 generator invented populated bounds, it never showed.
@@ -536,6 +541,128 @@ repeats across the 328 formularies. Every NDC in both real months is unhyphenate
 exercised only by the synthetic fixtures. The real rejection rate is zero.
 
 
+### Package code swaps were reported as drugs dropped and re-added
+
+**What was wrong.** CMS lists exactly one NDC per RXCUI per formulary (May 2026:
+1,123,842 rows, 1,123,842 distinct formulary and RXCUI pairs) and changes which
+NDC stands for a drug from one month to the next. The diff compared NDC to NDC.
+A swap therefore came out as one NDC removed and another added, so a drug that
+never left a formulary was reported as dropped and re-added, and anything that
+changed in the same month as the swap (a tier move, a step therapy requirement
+lifted) was never compared, because no single NDC carried both sides.
+
+**How many rows it affected.** Drug and plan changes from `rxdelta diff`, before
+and after the fix, on the three real month pairs:
+
+| | May to June | June to July | May to July |
+|---|---|---|---|
+| changes | 1,030,491 to 222,989 | 471,712 to 266,044 | 1,489,015 to 477,070 |
+| change groups | 1,367 to 686 | 4,339 to 4,138 | 5,515 to 4,720 |
+| drug removed | 465,646 to 62,769 | 218,116 to 112,793 | 677,719 to 169,997 |
+| drug added | 481,042 to 75,523 | 239,164 to 133,841 | 714,163 to 203,759 |
+| tier down | 346 to 380 | 1,891 to 6,557 | 1,436 to 6,136 |
+| tier up | 0 to 0 | 0 to 208 | 0 to 208 |
+| step therapy removed | 323 to 357 | 302 to 496 | 625 to 853 |
+| prior auth added | 79,050 to 79,900 | none | 79,050 to 79,900 |
+
+Between June and July every hidden tier move belongs to four dapagliflozin
+products (the 5 and 10 MG tablets and the two extended release combinations with
+metformin), whose brand NDCs were replaced by generic ones while their tiers
+moved: down on most formularies, up from tier 3 to 6 on 104 plans. For the May
+to June report the fix also changes the pricing counts quoted under
+[coinsurance](#coinsurance-is-unpriceable-on-the-real-files): 235 of 686 groups
+carry no price and 541 have no modal case. (Splitting groups by
+[cost direction](#tier-numbers-do-not-order-cost) later made that 244 of 695
+groups unpriced and 550 with no modal case.)
+
+**How it was found.** Not by the diff tests, which use fixtures with one NDC per
+drug that never changes. The question layer (part 6) rolls changes up to RXCUIs,
+and a check of the real months found that 24,179 of the 27,794 RXCUI level
+removals between May and June were drugs still listed on that formulary under
+another NDC. Looking at why showed the one NDC per RXCUI layout, and pairing the
+NDCs then surfaced the tier moves hidden inside swaps. The question tools were
+fixed first; the diff and the report followed, so that all four readers of the
+data use one rule.
+
+**The fix.** `rxdelta/swaps.py` holds the rule: on a formulary pair, an NDC
+removed and an NDC added for the same RXCUI are one drug's before and after, and
+`classify` compares them like any other pair. A removed NDC with no partner is a
+removal only if the RXCUI is gone from the later formulary, and an added one only
+if the RXCUI was absent before. The diff applies it per formulary pair, the
+report and `summary` inherit it from the diff, the question tools take the diff's
+output, and the eval's gold answers call the same function. `tests/test_swaps.py`
+covers the rule directly and, on a fixture with a swap and nothing else, a swap
+with a tier move and a real removal, checks that `diff`, the report, the tools
+and gold all show exactly one tier change and one removal. On the real months
+gold and the tools agree on every row of all three pairs (8,561, 19,041 and
+26,917 rows), and the diff's own output agrees with the tools drug for drug and
+plan for plan. `docs/example-report-cms.html` was regenerated.
+
+Diff and score for May to June went from 21.20 to 6.48 seconds, because most of
+the old changes were never real. The first version was far slower instead: the
+lookup of a formulary's RXCUIs used `SELECT DISTINCT`, and SQLite answered it
+from the `(snapshot_month, rxcui)` index by scanning the whole month, about a
+second per formulary. Without `DISTINCT` it uses the formulary index.
+
+### Tier numbers do not order cost
+
+**What was wrong.** The diff labels a move to a higher numbered tier `tier_up`,
+and the report scored and coloured it as the member paying more. A tier number
+is a label CMS assigns, not a price. On the real files tier 6 is a "select care"
+tier that most plans price at $0, so a move from tier 3 to tier 6 usually costs
+the member less, and the report ranked those moves as if they were the worst
+news of the month.
+
+**How many rows.** Each tier move, per drug and plan, compared the old tier's
+published cost sharing in the earlier month with the new tier's in the later
+month, like for like (initial coverage phase, same supply length, same pharmacy
+channel):
+
+| | costs more | costs less | same | unknown |
+|---|---|---|---|---|
+| May to June, tier down (380) | 0 | 275 | 9 | 96 |
+| June to July, tier up (208) | 0 | 200 | 2 | 6 |
+| June to July, tier down (6,557) | 0 | 4,819 | 390 | 1,348 |
+| May to July, tier up (208) | 0 | 200 | 2 | 6 |
+| May to July, tier down (6,136) | 0 | 4,531 | 395 | 1,210 |
+
+No tier decrease costs more in any pair, but 200 of the 208 tier increases cost
+less, and not one is confirmed to cost more. The tier number pointed the wrong
+way for 96 percent of the tier increases. The channels never disagreed: in no
+row did one channel or supply length say more while another said less.
+
+**How it was found.** By asking the question of the swap fix's output: the 208
+tier increases between June and July were all dapagliflozin moving from tier 3
+to tier 6, and looking up tier 6 on those plans showed $0 copays where tier 3
+charged $47 or 20 percent coinsurance.
+
+**The rule.** `rxdelta/diff/cost_direction.py` compares, for each supply length
+and channel published at both tiers, a copay with a copay in dollars and a
+coinsurance with a coinsurance by rate. A copay against a coinsurance is decided
+only without needing a drug price: a $0 copay never costs more than a positive
+share, 0 percent never more than a positive copay, and otherwise only when the
+coinsurance publishes dollar bounds the copay lies outside. A direction is given
+when every comparable leg agrees; when none is comparable, or they disagree, it
+is `unknown`. The first version looked only at the modal case, a preferred retail
+30 day fill, and left 5,374 of the June to July tier decreases unknown because
+most plans do not offer that channel at all; reading every channel published at
+both tiers settled most of them. Most of the remaining unknowns are a copay at
+one tier against coinsurance with no dollar bounds at the other.
+
+**What changed.** `tier_up` and `tier_down` are unchanged, because they say what
+CMS did. Every tier move now carries `cost_direction`: in the diff's JSON and
+CSV, in the terminal table and report labels ("Tier up (costs the member less)"),
+and in the question tools' rows, with `count_changes` able to group by it. The
+report's direction, and so its severity ranking, follows `cost_direction` for a
+tier move; an unknown or same direction counts for neither side. Plans on one
+change can price the two tiers differently, so report groups and tool rows are
+split by direction rather than labelled by a majority; that took the May to June
+report from 686 to 695 groups. Gold computes the direction again from the raw
+cost rows with its own code, and gold and the tools agree on every row of all
+three real month pairs (8,573, 19,154 and 27,032 rows). `tests/test_cost_direction.py`
+covers each comparison rule and a fixture with a tier increase that costs less,
+one that costs more and one that cannot be told.
+
 ## Part 5: incidents and open questions
 
 ### `make clean` deleted the real CMS download
@@ -559,10 +686,12 @@ appears in the README.
 - **104 groups share a severity of exactly 60.00.** A hard cluster on a round
   number suggests a term in the score is saturating or falling back to a default
   rather than varying. Not investigated.
-- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 79
-  percent of groups. Real changes cluster into a few archetypes, so the score
-  separates archetypes well and separates within them poorly. The committed CMS
-  report states 150 distinct severity values across 1,367 groups.
+- **Severity is bimodal on real data.** The 20 to 39 and 60 to 79 bands hold 70
+  percent of groups (79 before package code swaps were paired). Real changes
+  cluster into a few archetypes, so the score separates archetypes well and
+  separates within them poorly. With swaps paired the May to June comparison has
+  104 distinct severity values across 695 groups, and the 104 group tie at 60.00
+  is unchanged.
 - **The layout change detection path has never been triggered by data.** May and
   June 2026 share one record layout version, so it fired only because old code
   met new files.
@@ -572,6 +701,10 @@ appears in the README.
 
 ### The committed CMS report predates the limitations correction
 
+> Superseded. The real files were downloaded again with `rxdelta fetch-cms` and
+> `docs/example-report-cms.html` was regenerated after package code swaps were
+> paired, so it now carries the corrected limitations text too.
+
 `docs/example-report-cms.html` was generated before the limitations text was
 corrected, and the real files it was built from are gone, so it cannot be
 regenerated. It still names the coverage gap as an unpriced phase. Page 1 of
@@ -579,3 +712,590 @@ regenerated. It still names the coverage gap as an unpriced phase. Page 1 of
 three phases since 2025 and the coverage gap phase was eliminated, so the text
 shipped in `rxdelta/limitations.py` and in `docs/example-report.html` is the
 corrected one. The CMS report is a point in time artifact and is left as it is.
+
+
+## Part 6: question answering
+
+The groundwork for `rxdelta ask`: a read-only tool layer an agent will call, a
+drug name layer so questions can name drugs instead of RXCUIs, an eval set with
+gold answers computed independently of the tools, and a harness that scores any
+runner against it. Like parts 1 to 3, most of this was first built against
+synthetic fixtures, because no real months were loaded in the checkout. Where
+real data later changed a decision, the entry says so.
+
+### Setup
+
+> Superseded. The upstream repository was later added as `origin`, and the
+> feature commits were moved onto `origin/main` with
+> `git rebase --onto origin/main main feat/ask-phase1`. The local baseline
+> commit is gone. Upstream had two commits the baseline lacked (removing
+> `.claude/` and trimming `.gitignore`); the rebase applied without conflicts,
+> and the only `.gitignore` line Phase 1 adds is `runs/`.
+
+**The checkout was not a git repository, so one was created.** The folder had no
+`.git` anywhere. The brief asks for a branch and a commit per step, so the
+existing files were committed unchanged to `main` as a baseline and the work
+happens on `feat/ask-phase1`. Would change: if this folder is later reconciled
+with an upstream clone, the baseline commit should be replaced by the upstream
+history and the branch rebased onto it.
+
+**Package name mapping: none needed.** The package folder inside `rxdelta_main/`
+is `rxdelta/`, which matches the brief.
+
+**Ruff no longer formats Markdown.** The installed ruff formats Python code
+blocks inside `.md` files, so `ruff format --check` failed on
+`docs/phase1-prompt.md` before any work started. Markdown is excluded from ruff
+rather than rewriting the brief. Would change: if the docs should have their
+code blocks formatted, drop the exclusion and reformat them.
+
+> Superseded. These entries first lived in `docs/decisions.md`, as the brief
+> named it. They were moved here so every judgment call is in one file, in the
+> same shape as parts 1 to 5.
+
+**This log lived at `docs/decisions.md`, beside the root `DECISIONS.md`.** The
+brief named that path. Keeping two decision logs meant two places to look and
+two styles, so the entries became this part.
+
+### Data
+
+> Superseded. The May, June and July 2026 releases were later downloaded and
+> loaded, and `evals/rxdelta_v1.jsonl` is now built from them. The fixture set
+> moved to `evals/rxdelta_fixture_v1.jsonl` and is still what tests and CI use.
+> See [What real CMS data changed](#what-real-cms-data-changed) below.
+
+**No months are loaded locally, so everything is built on fixtures.** There is no
+database file in the checkout. Per the brief, no CMS files were downloaded. A
+new three month fixture set in `tests/fixtures/ask/` covers every change type in
+every month pair, `rxdelta evalset build` takes `--db`, and the committed
+`evals/rxdelta_v1.jsonl` is built from the fixture database. **The published
+eval set must be rebuilt once real months are loaded.** Would change: loading
+real months.
+
+**A separate fixture set rather than extending `tests/fixtures/snapshots/`.** The
+existing fixtures are one formulary, two plans and 17 unnamed drugs, sized for
+the diff tests that pin exact counts. The eval needs named products, several
+formularies and plans, ambiguous brands and cost tiers. Adding all that to the
+existing set would change the numbers those tests assert. Would change: nothing
+obvious; the two sets serve different tests.
+
+**Fixture product names are real, identifiers are synthetic.** Questions should
+read like what people ask ("Ozempic", "Eliquis"), but the fixture RXCUIs and NDCs
+are invented, in ranges that do not collide with the sample data, so nothing in
+the repo implies they are real RxNorm or FDA codes. Would change: if a real
+RxNorm subset is ever committed, switch to its identifiers.
+
+### Mapping the brief onto the real schema
+
+**Twelve change types, not ten.** The existing classifier also emits
+`quantity_limit_tightened` and `quantity_limit_loosened`. The brief says the
+enum must match the classifier exactly, so the tools use
+`rxdelta.types.ChangeType` itself, with its existing values (`prior_auth_added`
+rather than `pa_added`).
+
+**Plan table exists.** `plan_info` has contract ID, plan ID, segment ID, plan name
+and formulary ID, so `find_plan` searches plans, not only formulary IDs.
+
+### Drug names
+
+**`drug_names` is migrated in place, not replaced by a second table.** The old
+table had one row per RXCUI. `rxdelta/db/migrate.py` runs before the schema on
+every connect, detects the old shape by the missing `name_type` column, and
+rebuilds the table in one transaction: each old name becomes a `full` row, and
+a `brand` row is added when the name ends in an RxNorm style `[Brand]`. Empty
+names, which the old cache used to mark "RxNav does not know this", are not
+carried over. The report reads only `full` rows, so its output is unchanged
+(checked by diffing `diff`, `summary` and `report` output against `main` on the
+sample data). Would change: a need to keep the old table for some other reader.
+
+**The primary key is `(rxcui, name_type, name_norm)`, and an RXCUI keeps one
+full name.** Several ingredient and brand rows per RXCUI are the point, but two
+full names for one concept would make the display name ambiguous, so writing a
+new full name deletes the old one.
+
+**`source` is not restricted to `rxnav`, `rrf`, `fixture`.** The committed cache
+`data/reference/drug_names.csv` already uses `synthetic`, and every command loads
+it, so a check constraint would break existing databases. The three new loaders
+write exactly `rxnav`, `rrf` and `fixture`.
+
+**`names refresh` is left exactly as it was; `names fetch` is new.** `refresh`
+maintains the committed CSV cache through the old urllib client and is part of
+the existing surface. `fetch` writes full, ingredient and brand names straight
+to the database through `httpx`, which the brief allows and which makes the
+transport easy to mock. The two share the token bucket rate limiter and the
+`[names]` rate, retry and timeout settings. Would change: retiring the CSV
+cache, at which point `refresh` can be removed.
+
+> Superseded in part. Brands are no longer read from `related.json?tty=BN`;
+> on real data that attached brand names to 1,956 generic drugs. See
+> [RxNav gives generic drugs brand names](#rxnav-gives-generic-drugs-brand-names).
+
+**RxNav endpoints.** Checked against the RxNav API documentation on 2026-11-17:
+`/REST/rxcui/{rxcui}/properties.json` gives the concept name and returns no
+`properties` element for an RXCUI outside the active set (treated as not found,
+as is a 404); `/REST/rxcui/{rxcui}/related.json?tty=IN+MIN+BN` gives ingredients
+(`IN`, and `MIN` for multi-ingredient names) and brands (`BN`) under
+`relatedGroup.conceptGroup[].conceptProperties[].name`. The terms of service
+allow 20 requests per second per IP; the default here stays at 8.
+
+**`names fetch` skips RXCUIs already logged as missing.** "Resumable, skips
+RXCUIs already stored" could mean names only. Skipping logged misses too means a
+rerun after a full pass makes no requests at all. Would change: add a
+`--retry-missing` flag if RxNav coverage improves.
+
+**Hard failures are not logged to `drug_names_missing`.** A network failure says
+nothing about whether the RXCUI exists, so it is counted and retried on the next
+run rather than recorded as "not found".
+
+**The RRF loader stores full names and bracketed brands, not ingredients.**
+`RXNCONSO.RRF` carries names but the drug to ingredient links live in
+`RXNREL.RRF`, which the brief does not mention. Ingredient queries still match
+through the token stage, because the ingredient is part of every clinical drug
+name. Would change: accept an `--rel` file and walk the ingredient relations.
+
+**Matcher scoring.** Exact and identifier matches score 100. A token match scores
+the query length over the name length, so the shortest name containing every
+token ranks first. A fuzzy match takes the better of the whole-string
+`rapidfuzz` ratio and the weakest per-token ratio (each query token paired with
+its closest name token), which handles both "ozempik" and "ozempik pen" without
+letting one good token carry a bad one. Threshold 85, near-miss floor 60, both
+in `[names.match]`.
+
+**Products are grouped by brand, then ingredient, then full name.** Every RXCUI
+that shares a brand name is one product; generics group by ingredient. So
+"Ozempic" is one product with three RXCUIs, and "semaglutide" is three products
+(Ozempic, Rybelsus, Wegovy).
+
+### Tool layer
+
+> Superseded. The first version below returned `ok=False` with a `no_results`
+> code. On review that read as "the call failed", which invites an agent to
+> retry or apologize instead of answering that nothing changed.
+
+**An empty answer is a success: `ok=True`, empty data, and a plain note.** A
+query that ran and matched nothing (no changes of that kind, the drug is not on
+that formulary, no months loaded) returns its normal data shape with empty
+lists, `total` 0 and a `note` that says why. `ok=False` is kept for calls that
+could not be answered as asked: `invalid_args`, `month_not_loaded`,
+`unknown_drug`, `unknown_plan` and `internal`. The `no_results` code was
+removed, and a test pins the five that remain. The oracle now turns an empty
+success into `no_data` itself (no change rows, no coverage rows, a zero count,
+no priced plans); the scorer needed no change, because it never read the error
+code except to count `invalid_args` calls. The eval set did not change. Would
+change: nothing expected.
+
+The first version, kept for the record: an empty but valid query used
+`ok=False` with code `no_results`, the note said why it was empty, and `data`
+held the empty shape so the caller still saw what was searched.
+
+**Unknown formulary IDs return `unknown_plan`.** There is no `unknown_formulary`
+code, `find_plan` is the tool that resolves formulary IDs, and the message says
+which formulary was not found and to use `find_plan`.
+
+**Change rows are one per RXCUI, formulary pair and change type.** The diff works
+per NDC and plan. Questions are asked per drug and formulary, so `get_changes`
+rolls the diff up, keeping the NDCs and plan IDs on each row and counting the
+plans. Rows whose before or after coverage differs in any field stay separate,
+so two NDCs of one RXCUI that changed differently are never merged.
+`formulary_id` is the formulary the plans used in `to_month`;
+`formulary_id_from` is kept for plans that switched formularies, and a
+`formulary_ids` filter matches either.
+
+**`count_changes` returns four counts, not one.** "How many changes" is
+ambiguous: rows (drug, formulary and type combinations), distinct drugs,
+formularies and plans are all reasonable readings. Each group and the total
+carry all four and the description says which is which. The eval's count
+questions ask about drugs and use the `drugs` count.
+
+**Before and after values are canonical strings.** A tier move is `"3"` to
+`"4"`, a flag is `"no"` to `"yes"`, a quantity limit is `"30 per 30 days"` or
+`"none"`, a drug added is `null` to `"tier 3"`. The format lives in
+`rxdelta/ask/values.py` and is shared by the tools, the gold queries and the
+scorer, so comparison never depends on formatting.
+
+**The diff is memoized per database file state and month pair.** On the real
+files `diff_snapshots` takes about ten seconds. The memo key includes the file's
+modification time and size, so a reload invalidates it. Would change: a long
+running server would want a size bound on the memo.
+
+**Provenance keys are not capped.** The brief asks for exactly which rows
+produced an answer, so `count_changes` lists every row key it counted. On real
+data that can be large. Phase 2 should keep provenance out of the text the agent
+reads and use it only for the grounding check. Would change: a config cap with
+a truncation flag, if the size becomes a problem.
+
+**`estimate_cost_change` reuses `tier_cost` and `estimate_impact`, not
+`build_groups`.** `build_groups` prices a whole diff and groups by NDC. The tool
+needs one drug in one scope, so it calls the two functions `build_groups` is made
+of, per plan, and spans the plans with the same min and max rule as
+`impact._merge`. When the tier did not change, the change range is zero and the
+note says other changes do not show in the figure. When the drug joins or
+leaves the formulary, the existing open ended rule applies and the note says so.
+
+**The plan ID format is `H1234-001` or `H1234-001-000`.** The segment defaults to
+`000`, which is what the plan file uses for single segment plans.
+
+**Tool schemas are post-processed.** Pydantic emits `$defs` for the change type
+enum and `anyOf [X, null]` for optional fields. The exported schemas inline every
+reference, drop titles, and turn an optional field into the plain type with no
+`null`, because an omitted field already means "no filter". `required` is taken
+from the model, so it always matches what validation enforces.
+
+**There is no JSON Schema validator dependency.** The schema test checks the
+structure that matters (no references, valid type names, required fields that
+exist and match the model, every example round trips through its input model)
+rather than adding `jsonschema`, which the brief's dependency rule would need a
+justification for.
+
+### Eval set
+
+**Gold shares only the answer contract with the tools.** `gold.py` imports the
+payload models and the canonical before and after strings from `rxdelta.ask`,
+and the config (for the cost code tables). It does not import `rxdelta.tools`
+or `rxdelta.diff`; both an AST check and a subprocess import check enforce
+that. Classification, filters and the cost range are written again in SQL and
+plain Python. Would change: nothing; this is the point of the gold module.
+
+**Gold arguments carry the question's own wording.** The brief's item format
+has a readable `gold_query` string. The oracle needs machine readable
+arguments, so each item also has `gold: {query, args}`, and the arguments
+include the drug and plan exactly as the question names them. The oracle looks
+those up through `find_drug` and `find_plan` rather than using the gold RXCUI,
+so a matcher bug shows up as an oracle miss.
+
+**Eval items carry `alternative` and `tags` beyond the brief's format.**
+`alternative` holds the full answer for every candidate of an ambiguous item,
+which the scorer accepts in place of a clarifying question. `tags` marks
+subtypes (wrong premise, needs the month list, no matching change), which keeps
+the category list exactly as the brief defines it.
+
+**Count questions ask about drugs.** "How many drugs moved up a tier" is scored
+against the distinct RXCUI count (`count_changes` totals `drugs`), and the
+expected answer says `unit: drugs`.
+
+**A change answer is a set of (RXCUI, formulary, change type, before, after).**
+The formulary is the one used in the later month. Without a formulary in the
+question, every formulary's changes are part of the answer.
+
+**Drug mentions must resolve to exactly one RXCUI outside the ambiguous
+category.** "Ozempic" is three RXCUIs, so non-ambiguous Ozempic questions say
+"Ozempic 1 mg". Every mention is checked against the matcher before use.
+
+**The typo share is the `typo` entry of `[evalset.mix]`.** The brief lists
+"typo share" separately from the mix, but the mix already has a typo category,
+and a second key would let the two disagree. Misspellings that match nothing
+become `no_answer` items (reason `unknown_drug`), capped at a quarter of the no
+answer quota so that category keeps its planted mix. Misspellings that match a
+different drug are discarded.
+
+**No answer items are weighted toward the answerable-looking kind.** Of the no
+answer items, the generator aims for 40 percent "change that did not happen",
+25 percent "not on that formulary", 20 percent made-up drug and 15 percent
+month not loaded, set in `[evalset.no_answer_mix]`.
+
+**Hand-written items with a polite disclaimer around a real question expect the
+real answer.** "I know you can't give medical advice, but did Januvia's tier
+change?" is scored as a change question, because answering the factual part
+while declining advice is the right behavior and a refusal is a false refusal.
+Pure advice questions, however politely phrased, expect a refusal.
+
+**Wrong premise items expect what actually happened.** "Why did Eliquis move to
+tier 5?" expects Eliquis's real changes (tier 3 to 2 and prior authorization
+added). When nothing at all happened ("Why was lisinopril removed?") the answer
+is `no_data` with `no_matching_changes`.
+
+> Superseded in naming. This describes the fixture set, now
+> `evals/rxdelta_fixture_v1.jsonl`, built by `make evalset-fixture`. `make
+> evalset` now builds the real set from `rxdelta-cms.db`.
+
+**The committed set is built through the CLI.** `make evalset` builds
+`evals.db` with `rxdelta load` and `rxdelta names load --fixture`. CLI commands
+also load the committed sample name cache, so `evals.db` carries those 648
+synthetic names too. That is harmless (none of them are formulary drugs) and it
+is what a user's database looks like. A test rebuilds the set from a database
+made the same way and compares it byte for byte with the committed file.
+
+**The manifest has no timestamp.** A build time would make two identical builds
+differ. The file hash, seed, config hash and database row counts identify a
+build.
+
+### Eval harness
+
+**The oracle looks questions up by their text.** The `Runner` protocol passes
+only the question and the context, and the context must never carry gold. The
+oracle gets every item through its constructor and maps question text to gold
+query. Its constructor refuses two items that ask the same question with
+different gold queries.
+
+**A runner exception is scored wrong, never right.** The harness catches it,
+records the message in `error`, and the scorer marks the item incorrect even if
+the placeholder answer happens to match (for example a `no_data` item).
+
+**Grounding compares absolute values.** Text usually carries the sign in words
+("$5.00 less"), so `-$5.00`, `$5 less` and `5` all match a tool value of `-5.0`.
+A percentage matches either its number or its fraction (`25%` matches `0.25`).
+Values are compared rounded to cents.
+
+**What grounding does not count as a claim.** Years (1900 to 2099), `YYYY-MM`
+months, identifiers (NDCs, plan IDs like `H1234-001`, anything with three or more
+hyphenated parts or a part longer than three digits), numbers followed by a
+strength unit (`1 mg`, `100 UNT/ML`), both sides of a ratio (`75/25`), numbers
+that appear in the question, and anything inside a drug, plan or product name a
+tool returned. A short hyphenated pair (`3-4`) and "10 to 20" are ranges, and
+each end is checked. Would change: if an agent writes ranges like `3-400`, this
+rule reads it as an identifier.
+
+**A formulary ID in the text is a claim.** `00026123` is checked like any number,
+so a made-up formulary ID is caught. It matches the tool's `"00026123"` because
+both normalize to the same value.
+
+**The worst items section lists failures first, then ungrounded passes, and
+stops.** When every item is right and grounded the section says so instead of
+showing correct items as "worst".
+
+> Superseded. The defaults are now the real set and its database,
+> `--set evals/rxdelta_v1.jsonl --db rxdelta-cms.db`. CI and the tests pass the
+> fixture set and `evals.db` explicitly.
+
+**`eval run` defaults to `--db evals.db`.** The eval set is built against the
+fixture database that `make evaldb` writes there; the default makes the
+documented command work without flags. Any other database is refused unless
+its row counts match the manifest.
+
+**A database whose row counts differ from the manifest is refused.** The brief
+asks for a hash check on the eval file. Gold answers are also only valid for the
+database they were computed from, so the harness compares the row counts the
+manifest recorded too. Would change: a content hash of the tables, if row
+counts ever prove too weak a check.
+
+**`eval run` exits 1 when a gate fails.** `[eval].min_accuracy` and
+`[eval].max_missed_refusal_rate` are the defaults, and `--min-accuracy` and
+`--max-missed-refusal-rate` override them, which is how CI demands 100 percent
+from the oracle. The null runner fails the default gate, by design.
+
+**The eval report has its own template in the report's template folder.** It
+copies the design tokens and table rules from `report.html.j2` and embeds the
+same fonts, rather than restructuring the existing template into blocks and
+risking a change to the committed report. About forty lines of CSS are
+duplicated as a result.
+
+**The noisy runner lives in `tests/`.** It is test-only, so it is not in
+`RUNNERS` and `rxdelta eval run --runner noisy` is an error.
+
+**Run folders get a numeric suffix on a clash.** Two runs started in the same
+second (common in tests) would otherwise write into one folder.
+
+### Config
+
+**Every Phase 1 tunable is in `config/rxdelta.toml`.** New sections:
+`[names.match]` (fuzzy threshold, near miss floor and count), `[tools]` and
+`[tools.row_caps]` (page size, one cap per tool), `[evalset]` with
+`[evalset.mix]`, `[evalset.no_answer_mix]`, `[evalset.splits]` and
+`[evalset.difficulty]`, and `[eval]` (cost tolerance, accuracy and missed
+refusal gates, workers, worst items shown). The RxNav rate, retries and timeout
+were already in `[names]` and are shared by `names refresh` and `names fetch`.
+The new sections are validated by Pydantic models inside the existing loader,
+and a bad value is a `ConfigError` naming the section and the key, like every
+other config error. Moving the builder's ratios into config left the eval set
+byte for byte the same; only the manifest's config hash changed.
+
+**What stays in code.** Request sizes the oracle asks for (it pages
+`get_changes` 100 rows at a time and asks `find_drug` for 25) are bounded by the
+tool caps in config, so they are not separate settings. The `find_drug` default
+`limit` of 10 is part of the tool's input schema, as the brief specifies.
+
+### CI
+
+> Superseded in part. `astral-sh/setup-uv@v10` failed to resolve on the
+> first push ("unable to find version `v10`"): that action publishes only full
+> version tags, with no moving major tag. The workflow pins `v10.3.3`, the
+> latest release. `actions/checkout@v7` resolved, since that repository does
+> keep a `v7` tag.
+
+**Actions bumped to the current majors.** `actions/checkout@v4` became `@v7`
+and `astral-sh/setup-uv@v5` became `@v10` (latest releases v7.0.1 and v10.3.3,
+checked against the GitHub releases API on 2026-11-17). Both still take the
+inputs the workflow uses.
+
+> Superseded in naming. CI now rebuilds and gates on the fixture set,
+> `evals/rxdelta_fixture_v1.jsonl`. The real set needs the CMS download, which
+> CI does not have.
+
+**The eval steps rebuild the set and compare bytes, then gate on the oracle.**
+CI builds `evals.db` with `make evaldb`, rebuilds the eval set into the runner's
+temp folder and `cmp`s it and its manifest against the committed copies, so a
+change that alters the set without a rebuilt file fails. Then it runs the oracle
+on every item with `--min-accuracy 1.0 --max-missed-refusal-rate 0`. The whole
+job was run locally on Python 3.11 and 3.12 before committing. No step uses the
+network beyond installing dependencies, and none needs a secret.
+
+### What real CMS data changed
+
+Everything above was first built and passed on the fixtures, with the oracle at
+100 percent. Then the May (`2026_20260513`), June (`2026_20260610`) and July
+(`2026_20260722`) 2026 releases were loaded, names were fetched for all 6,204
+formulary RXCUIs, and the eval set was rebuilt from them. The oracle's first run
+on the real set scored 96.5 percent. Each cause below was found, fixed, tested
+on the fixtures where the fixtures could be made to show it, and the set was
+rebuilt until the oracle reached 100 percent on all 220 items.
+
+#### The CMS download page moved
+
+The page the README linked returns "Page Not Found". The monthly files now live
+on data.cms.gov, and its catalog (`https://data.cms.gov/data.json`) lists every
+release's archive URL. Each archive is about 2.3GB, and 98 percent of that is the
+pharmacy networks file, which rxdelta does not read. The machine had 3.6GB free.
+The server honours HTTP range requests, so only the three needed tables (about
+10MB zipped per month) were read out of each remote archive, by reading the zip
+directory from the end of the file. Raw files sit under `data/`, which stays
+gitignored. Loads matched part 4: 1,123,842 formulary rows in May, no rejected
+rows in any month.
+
+#### The demo name cache put invented names on 12 real drugs
+
+Every CLI command loads `data/reference/drug_names.csv`, the synthetic cache
+behind `make demo`. Its made-up RXCUIs (200010 and up) collide with real ones,
+so before any fetch 12 real formulary drugs already had names like
+"Quetiaprin 25 MG oral solution" (really carvedilol 6.25 MG, RXCUI 200031), and
+`names fetch` skipped them as already named. Names from `rxnav`, `rrf` and
+`fixture` now count as real; anything else is a placeholder that a real source
+replaces and that never replaces a real name. The fetch then reported 6,204
+fetched and 0 already present.
+
+#### RxNav gives generic drugs brand names
+
+`related.json?tty=BN` for a generic clinical drug returns every brand of the same
+ingredient: generic carvedilol came back with "Coreg", generic medroxyprogesterone
+with "Provera". 1,956 of the 4,990 RXCUIs that had brand rows were generics, so
+"Coreg" would have matched the generic and grouped it with the brand. RxNorm
+names a branded concept with its brand in trailing brackets, and that is now the
+only brand source; the fetch asks for `IN` and `MIN` only. The real database was
+repaired by applying the same rule to the stored full names rather than
+refetching for an hour; the result is what a fresh fetch now writes (3,191 brand
+rows, none on a generic).
+
+#### One NDC per RXCUI, swapped every month
+
+In every real month each formulary lists exactly one NDC per RXCUI
+(1,123,842 rows, 1,123,842 distinct formulary and RXCUI pairs), and the NDC that
+stands for a drug changes from month to month. The diff works per NDC, so a swap
+reads as one NDC removed and another added. Between May and June, 24,179 of the
+27,794 removals were swaps: the RXCUI was still on that formulary. At the RXCUI
+grain the tools would have told someone 87 percent of "dropped" drugs were
+dropped when they were not. Worse, the diff never compares the old and new NDC,
+so a coverage change made in the same month as a swap vanished: between June
+and July 300 of the 365 tier decreases and all 12 tier increases happened
+inside swaps.
+
+The tools now pair the swapped out NDC with the swapped in one under the same
+RXCUI and formulary pair and run them through the diff's own `classify`, so
+nothing is reclassified by new code. Gold does the same pairing in its own SQL.
+After the fix gold and the tools agree exactly on all three real month pairs
+(8,561, 19,041 and 26,917 change rows). The fixtures gained two swaps, one with
+identical coverage and one that moves Januvia from tier 3 to 4 while its NDC
+changes, so both cases are tested offline.
+
+> Superseded. The pairing was later moved into `rxdelta/swaps.py` and the diff
+> itself, so `diff`, `summary` and `report` use it too; see
+> [package code swaps](#package-code-swaps-were-reported-as-drugs-dropped-and-re-added)
+> in part 4.
+
+The existing `diff` and `report` commands were left as they are, because they
+must not change. They report per NDC and therefore still count swaps as an
+addition plus a removal and still miss coverage changes inside a swap. That is
+now an open question for the report, not just for the question layer.
+
+#### An unpriced tier with no tier move returned no change
+
+Six cost items and one misspelled cost item failed the same way. When a drug's
+tier did not change but the plan publishes no dollar amount for that tier
+(coinsurance with zero bounds, which part 4 found is most coinsurance), the tool
+said in its note that the change was zero and then returned no change range,
+marked unpriced. The brief asks for a zero change range when the tier did not
+move, and gold followed the brief. The tool now returns zero, priced, with the
+before and after amounts left empty. The fixtures always priced every tier the
+generator happened to pick, so this never showed there; a fixture test now
+covers tier 5 on plan S9012-001, which publishes no bounds.
+
+#### Plan names repeat
+
+"Gold Heart & Diabetes" matches 41 plans on three formularies. The builder had
+used it as if it named one plan; the oracle, like any agent, took the first
+match and found nothing. Plan name questions now use only names that pick out
+exactly one plan, matched the way `find_plan` matches.
+
+#### The fixtures had hidden how few real drugs have a plain name
+
+On real data 43 percent of formulary RXCUIs had no brand or ingredient name
+that resolved to them alone, and the builder had quietly fallen back to writing
+the RXCUI, so 35 percent of drug mentions were IDs against a configured 8. It
+now also tries the ingredient or brand with strength and dose form
+("dapagliflozin 10 mg oral tablet"), uses an ID only at the configured share, and
+skips a drug it cannot name. Two more limits came from real sizes: list
+answers reached 3,335 drugs ("which drugs were dropped between May and July"),
+so `[evalset].max_list_items` caps them at 50, and 41 ambiguous names and 50
+drug classes had more drugs than `find_drug` returns (its cap is 25), which no
+agent could list in full, so both now stay within that cap.
+
+#### Scale
+
+On the fixtures everything ran in seconds. On real data the builder's set up
+took 183 seconds, 114 of them in the fuzzy stage of the matcher, reached by
+candidate drug mentions that did not match exactly. Mentions must resolve
+exactly, so their check now skips the fuzzy stage, and the matcher gained exact
+name and token indexes. Gold reclassified a whole month pair on every
+candidate; it now memoizes per database file state, like the tools. A real
+build takes about 80 seconds and an oracle run over all 220 items about two and
+a half minutes.
+
+#### A duplicate question
+
+Rebuilding the fixture set after the swap fixes produced two out of scope items
+with the same text, "what dose of trelegy ellipta should i be taking". That
+template names one drug, but the duplicate check keyed on an unused second
+drug too. The builder now keeps only arguments a template uses and refuses any
+question text it has already produced.
+
+### Gold shares the swap rule
+
+Gold was built to share nothing with the tools, so a tool bug could not reach the
+eval set. The package code swap rule is the one exception: it now lives in
+`rxdelta/swaps.py`, and the diff, the report, the tools and gold all call it, so
+the four cannot disagree about what a swap is. The cost is that a bug in that
+rule would be copied into gold and the gold versus tool test would not catch it.
+The rule is therefore tested on its own in `tests/test_swaps.py`, with explicit
+cases, and gold still fetches its rows with its own SQL and classifies pairs with
+its own code rather than the diff's `classify`. The gold import test allows
+`rxdelta.swaps` and still forbids `rxdelta.tools` and `rxdelta.diff`.
+
+### Downloading a release
+
+`rxdelta fetch-cms --release 2026_20260513` turns the one-off range read into a
+command. It finds the release's archive in the data.cms.gov catalog
+(`[source.download]` in config), reads the zip directory from the end of the
+remote file, and unpacks only the inner archives matching `[source.files]`:
+about 10MB instead of 2.3GB. It writes `SOURCE.json` with the URL and each file's
+SHA-256 next to the files. Fetching the July release again reproduced the three
+loaded files hash for hash. `make cms-fetch` fetches all three months.
+
+The eval manifest records each month's release (`"releases"`). It does not trust
+a folder name alone: `rxdelta evalset build --data-dir data` hashes the files
+under each month and requires them to match the SHA-256 the load wrote to
+`ingest_log`, then reads the release from the folder they sit in. The fixture
+set has no releases and records an empty map.
+
+### Questions too big for one tool call
+
+The `over_cap` category (5 percent, taken from `filtered_list`) asks for lists
+whose real answer has more change rows than `get_changes` returns in one call.
+Its expected answer is the number of drugs; the full list is kept as the item's
+`alternative`. A runner is right if it gives the count, or a list marked
+`truncated` that states the right `total` and holds only correct drugs, or the
+complete list. The summary records which path each runner took. The oracle reads
+the first page, sees `truncated`, and takes the total from `count_changes`.
+
+The fixtures have no answer over the real cap of 100 rows, so the fixture set
+reports its `over_cap` quota as a shortfall in the manifest instead of filling
+it with something else. A test builds a set with `get_changes` capped at 5, where
+the fixtures do produce over cap questions, and requires the oracle to score 100
+percent on them through the truncated path with every number grounded.
+

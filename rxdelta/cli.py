@@ -17,18 +17,28 @@ from rich.console import Console
 from rich.table import Table
 
 from rxdelta import __version__
-from rxdelta.config import Config, get_config
+from rxdelta.config import CATEGORIES, Config, get_config
 from rxdelta.db import DEFAULT_DB_PATH, connect, queries
 from rxdelta.diff import impact
+from rxdelta.diff.cost_direction import CostDirection
 from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
+from rxdelta.evals import builder as evalset_builder
+from rxdelta.evals import harness as eval_harness
+from rxdelta.ingest import download as cms_download
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
+from rxdelta.names import fetch as names_fetch_module
+from rxdelta.names import fixture as names_fixture
+from rxdelta.names import rrf as names_rrf
 from rxdelta.names import rxnav
+from rxdelta.names import store as names_store
 from rxdelta.names.cache import load_cache, read_csv, write_csv
 from rxdelta.report import format as fmt
 from rxdelta.report import html
-from rxdelta.types import RxdeltaError
+from rxdelta.tools import registry as tool_registry
+from rxdelta.tools.context import ToolContext
+from rxdelta.types import ChangeType, RxdeltaError
 
 app = typer.Typer(
     add_completion=False,
@@ -167,6 +177,7 @@ def _group_payload(config: Config, group: ChangeGroup) -> dict[str, Any]:
         "tier_after": group.tier_after,
         "tier_before_label": config.tier_label(group.tier_before),
         "tier_after_label": config.tier_label(group.tier_after),
+        "cost_direction": group.cost_direction.value if group.cost_direction else None,
         "plan_count": group.plan_count,
         "plans": [str(p) for p in group.plans],
         "severity": group.severity,
@@ -199,11 +210,25 @@ def _diff_payload(config: Config, result: DiffResult, groups: list[ChangeGroup])
             "drugs_in_to": result.drugs_to,
         },
         "counts_by_change_type": {t.value: n for t, n in result.counts_by_type().items()},
+        "tier_moves_by_cost_direction": _tier_moves_by_cost(groups),
         "groups": [_group_payload(config, g) for g in groups],
         "limitations": list(LIMITATIONS),
         "estimate_note": ESTIMATE_NOTE,
         "open_ended_note": OPEN_ENDED_NOTE,
     }
+
+
+def _tier_moves_by_cost(groups: list[ChangeGroup]) -> dict[str, dict[str, int]]:
+    """Drug and plan pairs per tier move, split by what the move did to cost."""
+    out: dict[str, dict[str, int]] = {}
+    for group in groups:
+        if group.cost_direction is None:
+            continue
+        for change_type in group.change_types:
+            if change_type in (ChangeType.TIER_UP, ChangeType.TIER_DOWN):
+                row = out.setdefault(change_type.value, {d.value: 0 for d in CostDirection})
+                row[group.cost_direction.value] += group.plan_count
+    return out
 
 
 _GROUP_CSV_HEADER = [
@@ -218,6 +243,7 @@ _GROUP_CSV_HEADER = [
     "impact_open_ended",
     "impact_priced",
     "severity",
+    "cost_direction",
 ]
 
 
@@ -235,6 +261,7 @@ def _group_csv_rows(groups: list[ChangeGroup]) -> list[list[Any]]:
             int(g.impact.open_ended),
             int(g.impact.priced),
             g.severity,
+            g.cost_direction.value if g.cost_direction else "",
         ]
         for g in groups
     ]
@@ -353,7 +380,7 @@ def diff_command(
         for group in groups[:limit]:
             table.add_row(
                 fmt.ndc_display(group.ndc_11),
-                fmt.change_types(group.change_types),
+                fmt.change_label(group),
                 fmt.tier_move(config, group),
                 f"{group.plan_count:,}",
                 fmt.impact_range(group.impact),
@@ -593,7 +620,9 @@ def status(
         console.print(f"Wrote {json_out}")
 
 
-names_app = typer.Typer(no_args_is_help=True, help="Manage the RXCUI to drug name cache.")
+names_app = typer.Typer(
+    no_args_is_help=True, help="Manage drug names: fetch, load and check coverage."
+)
 app.add_typer(names_app, name="names")
 
 
@@ -681,6 +710,371 @@ def names_refresh(
             },
         )
         console.print(f"Wrote {json_out}")
+
+
+@names_app.command("fetch")
+@handle_errors
+def names_fetch(
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Fetch full, ingredient and brand names from RxNav for formulary RXCUIs.
+
+    Skips RXCUIs that already have names or were already reported missing, so
+    it is safe to stop and rerun. Uses the network; nothing else does.
+    """
+    conn = connect(db)
+    config = get_config(config_path)
+    client = names_fetch_module.RxNavClient(config.names)
+
+    def progress(summary: names_fetch_module.FetchSummary, total: int) -> None:
+        done = summary.fetched + summary.not_found + summary.failed
+        console.print(
+            f"  {done:,}/{total:,} checked: {summary.fetched:,} fetched, "
+            f"{summary.not_found:,} not found, {summary.failed:,} failed",
+            highlight=False,
+        )
+
+    console.print(
+        f"Fetching from {config.names.api_base} at up to "
+        f"{config.names.requests_per_second:g} requests per second."
+    )
+    try:
+        summary = names_fetch_module.fetch(
+            conn, client, progress_every=config.names.progress_every, on_progress=progress
+        )
+    finally:
+        client.close()
+    if not summary.in_scope:
+        console.print(
+            "No RXCUIs found in the database. Load a snapshot first: rxdelta load --month YYYY-MM"
+        )
+        return
+    table = Table(title="Name fetch", title_justify="left")
+    table.add_column("Outcome")
+    table.add_column("RXCUIs", justify="right")
+    table.add_row("Fetched", f"{summary.fetched:,}")
+    table.add_row("Already present", f"{summary.already_present:,}")
+    table.add_row("Not found in RxNav", f"{summary.not_found:,}")
+    table.add_row("Failed", f"{summary.failed:,}")
+    console.print(table)
+    if summary.failed:
+        console.print(
+            f"[yellow]{summary.failed:,} RXCUI(s) failed and were not stored.[/yellow] "
+            "Rerun to retry only those."
+        )
+
+
+@names_app.command("load")
+@handle_errors
+def names_load(
+    rrf: Annotated[
+        Path | None, typer.Option("--rrf", help="Path to a local RxNorm RXNCONSO.RRF file.")
+    ] = None,
+    fixture: Annotated[
+        Path | None,
+        typer.Option("--fixture", help="CSV with rxcui, name_type and name columns."),
+    ] = None,
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Load drug names from a local file instead of the network."""
+    if (rrf is None) == (fixture is None):
+        raise RxdeltaError("Pass exactly one of --rrf or --fixture.")
+    conn = connect(db)
+    get_config(config_path)
+    if rrf is not None:
+        outcome = names_rrf.load(conn, rrf)
+        console.print(
+            f"{outcome.named:,} of {outcome.in_scope:,} formulary RXCUI(s) named from {rrf}. "
+            f"{outcome.not_found:,} not in the file, logged as missing."
+        )
+        return
+    assert fixture is not None
+    written = names_fixture.load(conn, fixture)
+    console.print(f"Loaded {written:,} name row(s) from {fixture}.")
+
+
+@names_app.command("status")
+@handle_errors
+def names_status(
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Show how many formulary RXCUIs have names, by source."""
+    conn = connect(db)
+    get_config(config_path)
+    report = names_store.status(conn)
+    if not report.formulary_rxcuis:
+        console.print("No RXCUIs found in the database. Load a snapshot first.")
+        return
+    share = 100.0 * report.named / report.formulary_rxcuis
+    console.print(
+        f"{report.named:,} of {report.formulary_rxcuis:,} formulary RXCUI(s) have names "
+        f"({share:.1f}%). {report.missing:,} have none; {report.logged_not_found:,} of those "
+        "were looked up and not found.",
+        highlight=False,
+    )
+    table = Table(title="Named RXCUIs by source", title_justify="left")
+    table.add_column("Source")
+    table.add_column("RXCUIs", justify="right")
+    for source, count in report.by_source.items():
+        table.add_row(source, f"{count:,}")
+    console.print(table)
+
+
+tools_app = typer.Typer(no_args_is_help=True, help="Inspect the read-only question tools.")
+app.add_typer(tools_app, name="tools")
+
+
+@tools_app.command("list")
+def tools_list() -> None:
+    """Name and one line description of every tool."""
+    table = Table(title="Tools", title_justify="left")
+    table.add_column("Name")
+    table.add_column("What it does")
+    for spec in tool_registry.TOOLS:
+        table.add_row(spec.name, spec.summary)
+    console.print(table)
+
+
+@tools_app.command("schema")
+@handle_errors
+def tools_schema(
+    output_format: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="anthropic: a list of {name, description, input_schema}. "
+            "json: input and output schemas.",
+        ),
+    ] = "anthropic",
+) -> None:
+    """Print every tool's input schema as JSON."""
+    if output_format == "anthropic":
+        payload: list[dict[str, Any]] = tool_registry.anthropic_tools()
+    elif output_format == "json":
+        payload = tool_registry.json_schemas()
+    else:
+        raise RxdeltaError(f"--format must be anthropic or json, got {output_format!r}")
+    typer.echo(json.dumps(payload, indent=2))
+
+
+@app.command("tool")
+@handle_errors
+def tool_call(
+    name: Annotated[str, typer.Argument(help="Tool name, see rxdelta tools list.")],
+    args: Annotated[str, typer.Option("--args", help="Tool arguments as a JSON object.")] = "{}",
+    pretty: Annotated[bool, typer.Option("--pretty", help="Indent the JSON output.")] = False,
+    db: DbOption = DEFAULT_DB_PATH,
+    config_path: ConfigOption = None,
+) -> None:
+    """Call one tool by hand and print its result as JSON."""
+    try:
+        parsed = json.loads(args)
+    except json.JSONDecodeError as exc:
+        raise RxdeltaError(f"--args is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise RxdeltaError('--args must be a JSON object, for example \'{"query": "ozempic"}\'')
+    context = ToolContext(db_path=db, config=get_config(config_path))
+    result = tool_registry.call_tool(name, parsed, context)
+    typer.echo(result.model_dump_json(indent=2 if pretty else None))
+
+
+evalset_app = typer.Typer(no_args_is_help=True, help="Build the question eval set.")
+app.add_typer(evalset_app, name="evalset")
+
+
+@evalset_app.command("build")
+@handle_errors
+def evalset_build(
+    db: Annotated[Path, typer.Option("--db", help="Database to compute gold answers from.")],
+    month_from: Annotated[str, typer.Option("--from", help="First month to draw from.")],
+    month_to: Annotated[str, typer.Option("--to", help="Last month to draw from.")],
+    out: Annotated[Path, typer.Option("--out", help="Eval set file to write (.jsonl).")],
+    n: Annotated[int, typer.Option("--n", help="Generated items, before hand-written ones.")] = 200,
+    seed: Annotated[int, typer.Option("--seed", help="Random seed.")] = 7,
+    handwritten: Annotated[
+        Path | None,
+        typer.Option("--handwritten", help="Hand-written items to merge in."),
+    ] = None,
+    data_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--data-dir",
+            help="Where the loaded CMS files are. Records each month's release ID in the "
+            "manifest after checking the files' hashes against the load.",
+        ),
+    ] = None,
+    config_path: ConfigOption = None,
+) -> None:
+    """Build a deterministic eval set with gold answers computed from the database."""
+    config = get_config(config_path)
+    hand = handwritten if handwritten and handwritten.is_file() else None
+    result, manifest = evalset_builder.build_file(
+        db,
+        config,
+        month_from=month_from,
+        month_to=month_to,
+        n=n,
+        seed=seed,
+        out=out,
+        handwritten_path=hand,
+        data_dir=data_dir,
+    )
+    table = Table(title=f"Eval set {out}", title_justify="left")
+    table.add_column("Category")
+    table.add_column("dev", justify="right")
+    table.add_column("test", justify="right")
+    for category in CATEGORIES:
+        members = [i for i in result.items if i.category == category]
+        table.add_row(
+            category,
+            str(sum(1 for i in members if i.split == "dev")),
+            str(sum(1 for i in members if i.split == "test")),
+        )
+    console.print(table)
+    console.print(f"{len(result.items)} item(s) written. Manifest: {manifest}")
+    if hand is None:
+        console.print("[yellow]No hand-written items merged.[/yellow]")
+    for short, missing in result.shortfalls.items():
+        console.print(
+            f"[yellow]{short}: {missing} fewer item(s) than the mix asks for.[/yellow] "
+            "The database does not hold enough distinct facts for that category."
+        )
+
+
+eval_app = typer.Typer(no_args_is_help=True, help="Score a runner against the eval set.")
+app.add_typer(eval_app, name="eval")
+
+
+def _pct(value: float | None) -> str:
+    return "n/a" if value is None else f"{100 * value:.1f}%"
+
+
+@eval_app.command("run")
+@handle_errors
+def eval_run(
+    set_path: Annotated[Path, typer.Option("--set", help="Eval set file.")] = Path(
+        "evals/rxdelta_v1.jsonl"
+    ),
+    runner_name: Annotated[str, typer.Option("--runner", help="oracle or null.")] = "oracle",
+    split: Annotated[str, typer.Option("--split", help="dev, test or all.")] = "dev",
+    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N items.")] = None,
+    category: Annotated[str | None, typer.Option("--category", help="One category.")] = None,
+    workers: Annotated[
+        int | None, typer.Option("--workers", help="Items answered in parallel.")
+    ] = None,
+    db: Annotated[Path, typer.Option("--db", help="Database the eval set was built from.")] = Path(
+        "rxdelta-cms.db"
+    ),
+    out_dir: Annotated[Path, typer.Option("--out-dir", help="Where run folders go.")] = Path(
+        "runs"
+    ),
+    min_accuracy: Annotated[
+        float | None, typer.Option("--min-accuracy", help="Override [eval].min_accuracy.")
+    ] = None,
+    max_missed_refusal_rate: Annotated[
+        float | None,
+        typer.Option("--max-missed-refusal-rate", help="Override [eval].max_missed_refusal_rate."),
+    ] = None,
+    config_path: ConfigOption = None,
+) -> None:
+    """Run one runner over the eval set and write results, a summary and a report."""
+    if split not in ("dev", "test", "all"):
+        raise RxdeltaError(f"--split must be dev, test or all, got {split!r}")
+    outcome = eval_harness.run(
+        set_path=set_path,
+        runner_name=runner_name,
+        split=split,
+        db_path=db,
+        config=get_config(config_path),
+        out_root=out_dir,
+        category=category,
+        limit=limit,
+        workers=workers,
+        min_accuracy=min_accuracy,
+        max_missed_refusal_rate=max_missed_refusal_rate,
+    )
+    summary = outcome.summary
+    overall = summary["overall"]
+    table = Table(title=f"{runner_name} on {split}", title_justify="left")
+    table.add_column("Category")
+    table.add_column("Items", justify="right")
+    table.add_column("Accuracy", justify="right")
+    for name, row in summary["by_category"].items():
+        table.add_row(name, str(row["items"]), _pct(row["accuracy"]))
+    console.print(table)
+    console.print(
+        f"Accuracy {_pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}). "
+        f"False refusals {overall['false_refusals']}, missed refusals "
+        f"{overall['missed_refusals']}, items with ungrounded numbers "
+        f"{summary['grounding']['items_with_ungrounded']}.",
+        highlight=False,
+    )
+    console.print(f"Wrote {outcome.directory}", highlight=False)
+    if not outcome.passed:
+        err_console.print(
+            "[bold red]gate failed[/bold red] " + "; ".join(summary["gates"]["reasons"])
+        )
+        raise typer.Exit(code=1)
+
+
+@eval_app.command("compare")
+@handle_errors
+def eval_compare(
+    run_a: Annotated[Path, typer.Argument(help="Earlier run folder.")],
+    run_b: Annotated[Path, typer.Argument(help="Later run folder.")],
+) -> None:
+    """Per category accuracy change and the items that flipped between two runs."""
+    result = eval_harness.compare(run_a, run_b)
+    table = Table(title="Accuracy by category", title_justify="left")
+    table.add_column("Category")
+    table.add_column("A", justify="right")
+    table.add_column("B", justify="right")
+    table.add_column("Change", justify="right")
+    for name, row in result.by_category.items():
+        delta = row["delta"]
+        table.add_row(
+            name,
+            _pct(row["a"]),
+            _pct(row["b"]),
+            "n/a" if delta is None else f"{100 * delta:+.1f} points",
+        )
+    console.print(table)
+    console.print(f"Right to wrong: {', '.join(result.right_to_wrong) or 'none'}", highlight=False)
+    console.print(f"Wrong to right: {', '.join(result.wrong_to_right) or 'none'}", highlight=False)
+
+
+@app.command("fetch-cms")
+@handle_errors
+def fetch_cms(
+    release: Annotated[
+        str, typer.Option("--release", help="Release ID, the archive name: 2026_20260513.")
+    ],
+    month: Annotated[
+        str | None,
+        typer.Option("--month", help="Snapshot month to file it under. Default: from the ID."),
+    ] = None,
+    directory: Annotated[
+        Path, typer.Option("--dir", help="Root directory holding one folder per month.")
+    ] = Path("data"),
+    config_path: ConfigOption = None,
+) -> None:
+    """Download one CMS monthly release, only the three tables rxdelta reads.
+
+    Uses the network. Reads the release archive in place over HTTP range
+    requests, so about 10MB is transferred instead of the 2.3GB archive.
+    """
+    config = get_config(config_path)
+    console.print(f"Looking up {release} in {config.download.catalog_url}")
+    fetched = cms_download.fetch_release(config, release, directory, month=month)
+    console.print(f"Read the tables from {fetched.url}", highlight=False)
+    for name in sorted(fetched.files):
+        console.print(f"  {fetched.directory / name}", highlight=False)
+    console.print(
+        f"Load it with: rxdelta load --month {fetched.month} --dir {directory}", highlight=False
+    )
 
 
 @app.command()

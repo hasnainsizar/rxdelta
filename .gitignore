@@ -26,6 +26,9 @@ data/*
 *.db-wal
 *.db-shm
 
+# Eval runs: one folder per run, regenerated at will.
+runs/
+
 # Reports written at the repo root. docs/example-report.html is committed.
 /report.html
 /ci-report.html
