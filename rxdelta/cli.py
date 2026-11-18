@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from rxdelta import __version__
+from rxdelta.agent import trace as agent_trace
 from rxdelta.config import CATEGORIES, Config, get_config
 from rxdelta.db import DEFAULT_DB_PATH, connect, queries
 from rxdelta.diff import impact
@@ -1044,6 +1045,18 @@ def eval_compare(
     console.print(table)
     console.print(f"Right to wrong: {', '.join(result.right_to_wrong) or 'none'}", highlight=False)
     console.print(f"Wrong to right: {', '.join(result.wrong_to_right) or 'none'}", highlight=False)
+
+
+@eval_app.command("show")
+@handle_errors
+def eval_show(
+    run_dir: Annotated[Path, typer.Argument(help="Run folder.")],
+    item_id: Annotated[str, typer.Argument(help="Item ID, for example rxd-v1-0042.")],
+) -> None:
+    """Print one item's run: tool calls, guard decisions, the answer and the gold."""
+    for record in agent_trace.find_records(run_dir, item_id):
+        console.print(agent_trace.render(record), highlight=False, markup=False)
+        console.print()
 
 
 @app.command("fetch-cms")

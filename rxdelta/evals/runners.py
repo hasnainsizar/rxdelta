@@ -14,6 +14,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from rxdelta.agent.loop import AgentRunner
 from rxdelta.ask.answer import (
     ChangeAnswer,
     ChangeItem,
@@ -450,6 +451,7 @@ RunnerFactory = Callable[[list[EvalItem], ToolContext], Runner]
 RUNNERS: dict[str, RunnerFactory] = {
     "oracle": OracleRunner,
     "null": NullRunner,
+    "agent": AgentRunner,
 }
 
 

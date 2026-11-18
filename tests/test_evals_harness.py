@@ -498,8 +498,8 @@ def test_percentile() -> None:
     assert harness.percentile(values, 0.95) == 95.0
 
 
-def test_runner_registry_has_oracle_and_null_only() -> None:
-    assert set(RUNNERS) == {"oracle", "null"}
+def test_runner_registry_has_oracle_null_and_agent() -> None:
+    assert set(RUNNERS) == {"oracle", "null", "agent"}
 
 
 # CLI

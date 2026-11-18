@@ -317,6 +317,7 @@ def run(
                 "required_tools": item.required_tools,
                 "output": output.model_dump(mode="json"),
                 "score": score.model_dump(mode="json"),
+                "trace": output.trace,
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     (directory / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
