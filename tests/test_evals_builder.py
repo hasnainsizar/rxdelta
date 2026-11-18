@@ -284,9 +284,9 @@ def test_build_is_byte_identical_for_the_same_inputs(
 def test_committed_eval_set_matches_a_fresh_build(
     eval_db: Path, config: Config, tmp_path: Path
 ) -> None:
-    out = tmp_path / "rxdelta_v1.jsonl"
+    out = tmp_path / EVAL_SET.name
     build(eval_db, out, config)
-    assert out.read_bytes() == EVAL_SET.read_bytes(), "rebuild with: make evalset"
+    assert out.read_bytes() == EVAL_SET.read_bytes(), "rebuild with: make evalset-fixture"
     committed = json.loads(manifest_path(EVAL_SET).read_text())
     fresh = json.loads(manifest_path(out).read_text())
     assert fresh == committed
@@ -314,6 +314,7 @@ def test_no_near_duplicates(built: list[EvalItem]) -> None:
         for i in built
     ]
     assert len(keys) == len(set(keys))
+    assert len({i.question for i in built}) == len(built)
     assert len({i.id for i in built}) == len(built)
 
 

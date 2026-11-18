@@ -591,13 +591,10 @@ class Generator:
         drug, drug2 = self.f.mentions[first][0], self.f.mentions[second][0]
         if normalize_name(drug) == normalize_name(drug2):
             return None
-        return self.candidate(
-            "out_of_scope",
-            t,
-            {"drug": drug, "drug2": drug2},
-            "refusal",
-            {"drug": drug, "drug2": drug2, "reason": "medical_advice"},
-        )
+        args = {"drug": drug, "reason": "medical_advice"}
+        if "{drug2}" in t.text:
+            args["drug2"] = drug2
+        return self.candidate("out_of_scope", t, {"drug": drug, "drug2": drug2}, "refusal", args)
 
     def typo(self, base: Category) -> tuple[Candidate | None, Candidate | None]:
         """A misspelled version of a base item, or an unresolved spill to no_answer."""
@@ -814,10 +811,13 @@ def build(
     seen: set[str] = set()
     shortfalls: dict[str, int] = {}
 
+    asked: set[str] = set()
+
     def accept(cand: Candidate | None) -> bool:
         if (
             cand is None
             or cand.key in seen
+            or cand.question in asked
             or len(accepted[cand.category]) >= quotas[cand.category]
         ):
             return False
@@ -825,6 +825,7 @@ def build(
         if answer is None or not _wanted(cand.category, answer, cand.tags):
             return False
         seen.add(cand.key)
+        asked.add(cand.question)
         accepted[cand.category].append((cand, answer))
         return True
 

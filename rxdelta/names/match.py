@@ -69,8 +69,13 @@ class DrugMatcher:
             for r in rows
         ]
         self._by_rxcui: dict[str, list[_Name]] = defaultdict(list)
-        for entry in self._names:
+        self._by_norm: dict[str, list[_Name]] = defaultdict(list)
+        self._by_token: dict[str, set[int]] = defaultdict(set)
+        for index, entry in enumerate(self._names):
             self._by_rxcui[entry.rxcui].append(entry)
+            self._by_norm[entry.norm].append(entry)
+            for token in entry.tokens:
+                self._by_token[token].add(index)
 
     def display_name(self, rxcui: str) -> str:
         for entry in self._by_rxcui.get(rxcui, []):
@@ -169,11 +174,9 @@ class DrugMatcher:
         return row is not None
 
     def _exact(self, query: str) -> list[DrugMatch]:
-        norm = normalize_name(query)
         best: dict[str, DrugMatch] = {}
-        for entry in self._names:
-            if norm and entry.norm == norm:
-                _keep_best(best, self._match(entry, "exact", 100.0))
+        for entry in self._by_norm.get(normalize_name(query), []):
+            _keep_best(best, self._match(entry, "exact", 100.0))
         return list(best.values())
 
     def _token(self, query: str) -> list[DrugMatch]:
@@ -182,7 +185,9 @@ class DrugMatcher:
         best: dict[str, DrugMatch] = {}
         if not wanted:
             return []
-        for entry in self._names:
+        hits = set.intersection(*(self._by_token.get(t, set()) for t in wanted))
+        for index in sorted(hits):
+            entry = self._names[index]
             if wanted <= entry.tokens:
                 # Shorter names that still contain every token rank higher.
                 score = 100.0 * len(norm) / max(len(entry.norm), len(norm))

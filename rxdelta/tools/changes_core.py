@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from rxdelta.ask.values import change_values
 from rxdelta.db import queries
-from rxdelta.diff.engine import diff_snapshots
+from rxdelta.diff.engine import DrugPlanChange, classify, diff_snapshots
 from rxdelta.tools.common import (
     CoverageValues,
     Month,
@@ -30,7 +30,7 @@ from rxdelta.tools.common import (
     rxcui_known,
 )
 from rxdelta.tools.envelope import ErrorCode
-from rxdelta.types import ChangeType, PlanKey
+from rxdelta.types import ChangeType, DrugCoverage, PlanKey
 
 _CHANGE_ORDER = {c: i for i, c in enumerate(ChangeType)}
 # rxcui, formulary before, formulary after, change type, before value, after value,
@@ -120,36 +120,91 @@ def all_rows(
     return hit
 
 
+def _covered(conn: sqlite3.Connection, month: str) -> set[tuple[str, str]]:
+    rows = conn.execute(
+        "SELECT DISTINCT formulary_id, rxcui FROM formulary WHERE snapshot_month = ?", (month,)
+    ).fetchall()
+    return {(str(r[0]), str(r[1])) for r in rows}
+
+
 def _build_rows(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[ChangeRow]:
     result = diff_snapshots(conn, month_from, month_to)
     formularies_from = {p.key: p.formulary_id for p in queries.plans(conn, month_from)}
     formularies_to = {p.key: p.formulary_id for p in queries.plans(conn, month_to)}
+    # The diff classifies NDCs, and CMS lists one representative NDC per RXCUI
+    # per formulary, swapping it from month to month. A swap reads there as one
+    # NDC removed and another added although the RXCUI never left. At the RXCUI
+    # grain the old and new NDC are paired and compared with the same classify
+    # the diff uses, so a tier move hidden inside a swap still shows.
+    covered_from = _covered(conn, month_from)
+    covered_to = _covered(conn, month_to)
 
     plans: dict[_RowKey, set[PlanKey]] = defaultdict(set)
     ndcs: dict[_RowKey, set[str]] = defaultdict(set)
     states: dict[_RowKey, tuple[CoverageValues | None, CoverageValues | None]] = {}
-    for change in result.changes:
-        before = CoverageValues.from_coverage(change.before) if change.before else None
-        after = CoverageValues.from_coverage(change.after) if change.after else None
-        for change_type in change.change_types:
+
+    def add(
+        plan: PlanKey,
+        rxcui: str,
+        change_types: tuple[ChangeType, ...],
+        before_coverage: DrugCoverage | None,
+        after_coverage: DrugCoverage | None,
+        found_in: set[str],
+    ) -> None:
+        before = CoverageValues.from_coverage(before_coverage) if before_coverage else None
+        after = CoverageValues.from_coverage(after_coverage) if after_coverage else None
+        for change_type in change_types:
             before_value, after_value = change_values(
                 change_type,
                 before.state() if before else None,
                 after.state() if after else None,
             )
             key: _RowKey = (
-                change.rxcui,
-                formularies_from[change.plan],
-                formularies_to[change.plan],
+                rxcui,
+                formularies_from[plan],
+                formularies_to[plan],
                 change_type,
                 before_value,
                 after_value,
                 before.model_dump_json() if before else "",
                 after.model_dump_json() if after else "",
             )
-            plans[key].add(change.plan)
-            ndcs[key].add(change.ndc_11)
+            plans[key].add(plan)
+            ndcs[key] |= found_in
             states[key] = (before, after)
+
+    swapped_out: dict[tuple[PlanKey, str], list[DrugPlanChange]] = defaultdict(list)
+    swapped_in: dict[tuple[PlanKey, str], list[DrugPlanChange]] = defaultdict(list)
+    for change in result.changes:
+        pair = (change.plan, change.rxcui)
+        if ChangeType.DRUG_REMOVED in change.change_types and (
+            (formularies_to[change.plan], change.rxcui) in covered_to
+        ):
+            swapped_out[pair].append(change)
+        elif ChangeType.DRUG_ADDED in change.change_types and (
+            (formularies_from[change.plan], change.rxcui) in covered_from
+        ):
+            swapped_in[pair].append(change)
+        else:
+            add(
+                change.plan,
+                change.rxcui,
+                change.change_types,
+                change.before,
+                change.after,
+                {change.ndc_11},
+            )
+    for (plan, rxcui), outs in sorted(swapped_out.items()):
+        for old in outs:
+            for new in swapped_in.get((plan, rxcui), []):
+                add(
+                    plan,
+                    rxcui,
+                    classify(old.before, new.after),
+                    old.before,
+                    new.after,
+                    {old.ndc_11, new.ndc_11},
+                )
 
     names = display_names(conn, [k[0] for k in plans])
     rows = [

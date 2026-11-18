@@ -14,7 +14,7 @@ else
 OPEN := xdg-open
 endif
 
-.PHONY: help install sample load diff summary report demo test lint typecheck check coverage bench example names distribution cms-load cms-example cms-distribution cms-bench clean ask-fixtures evaldb evalset eval-oracle eval-null
+.PHONY: help install sample load diff summary report demo test lint typecheck check coverage bench example names distribution cms-load cms-example cms-distribution cms-bench clean ask-fixtures evaldb evalset-fixture eval-fixture-oracle evalset eval-oracle eval-null
 
 help:
 	@echo "make demo       generate sample data, load both months, diff, open the report"
@@ -27,10 +27,11 @@ help:
 	@echo "make bench      measure load and diff time on the sample data"
 	@echo "make names      resolve drug names from RxNav into the committed cache"
 	@echo "make example    regenerate docs/example-report.html"
-	@echo "make cms-load   load the real CMS months (requires the download)"
+	@echo "make cms-load   load the three real CMS months (requires the download)"
 	@echo "make cms-example regenerate docs/example-report-cms.html from real data"
-	@echo "make evalset    rebuild evals/rxdelta_v1.jsonl from the fixture database"
-	@echo "make eval-oracle score the oracle runner on the dev split"
+	@echo "make evalset    rebuild evals/rxdelta_v1.jsonl from the real CMS database"
+	@echo "make eval-oracle score the oracle runner on the real set's dev split"
+	@echo "make evalset-fixture rebuild the fixture eval set used by tests and CI"
 	@echo "make clean      remove the database, generated data and report"
 
 install:
@@ -86,10 +87,12 @@ CMS_DB    ?= rxdelta-cms.db
 CMS_DIR   ?= data
 CMS_FROM  ?= 2026-05
 CMS_TO    ?= 2026-06
+CMS_NEXT  ?= 2026-07
 
 cms-load:
 	$(RUN) rxdelta load --month $(CMS_FROM) --dir $(CMS_DIR) --db $(CMS_DB)
 	$(RUN) rxdelta load --month $(CMS_TO) --dir $(CMS_DIR) --db $(CMS_DB)
+	$(RUN) rxdelta load --month $(CMS_NEXT) --dir $(CMS_DIR) --db $(CMS_DB)
 
 cms-example:
 	$(RUN) rxdelta report --from $(CMS_FROM) --to $(CMS_TO) \
@@ -118,10 +121,12 @@ clean:
 	rm -rf .pytest_cache .coverage .mypy_cache .ruff_cache
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
 
-# The question eval set. Built from the committed three month fixtures so it is
-# reproducible offline; rebuild it from real months once they are loaded.
+# The question eval sets. The real set is built from the loaded CMS months and
+# needs the download plus `rxdelta names fetch`. The fixture set is built from
+# the committed three month fixtures, so tests and CI can rebuild it offline.
 EVAL_SET  ?= evals/rxdelta_v1.jsonl
 EVAL_SEED ?= 7
+FIXTURE_SET ?= evals/rxdelta_fixture_v1.jsonl
 
 ask-fixtures:
 	$(RUN) python scripts/build_ask_fixtures.py --out tests/fixtures/ask
@@ -134,12 +139,19 @@ evaldb:
 	$(RUN) rxdelta load --month 2026-03 --dir tests/fixtures/ask --db evals.db
 	$(RUN) rxdelta names load --fixture tests/fixtures/ask/drug_names.csv --db evals.db
 
-evalset: evaldb
+evalset-fixture: evaldb
 	$(RUN) rxdelta evalset build --db evals.db --from 2026-01 --to 2026-03 --n 200 \
-		--seed $(EVAL_SEED) --out $(EVAL_SET)
+		--seed $(EVAL_SEED) --handwritten evals/handwritten_fixture.jsonl --out $(FIXTURE_SET)
+
+eval-fixture-oracle:
+	$(RUN) rxdelta eval run --set $(FIXTURE_SET) --runner oracle --split all --db evals.db
+
+evalset:
+	$(RUN) rxdelta evalset build --db $(CMS_DB) --from $(CMS_FROM) --to $(CMS_NEXT) --n 200 \
+		--seed $(EVAL_SEED) --handwritten evals/handwritten_real.jsonl --out $(EVAL_SET)
 
 eval-oracle:
-	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner oracle --split dev --db evals.db
+	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner oracle --split dev --db $(CMS_DB)
 
 eval-null:
-	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner null --split dev --db evals.db
+	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner null --split dev --db $(CMS_DB)

@@ -878,7 +878,7 @@ def evalset_build(
     handwritten: Annotated[
         Path | None,
         typer.Option("--handwritten", help="Hand-written items to merge in."),
-    ] = Path("evals/handwritten.jsonl"),
+    ] = None,
     config_path: ConfigOption = None,
 ) -> None:
     """Build a deterministic eval set with gold answers computed from the database."""
@@ -938,7 +938,7 @@ def eval_run(
         int | None, typer.Option("--workers", help="Items answered in parallel.")
     ] = None,
     db: Annotated[Path, typer.Option("--db", help="Database the eval set was built from.")] = Path(
-        "evals.db"
+        "rxdelta-cms.db"
     ),
     out_dir: Annotated[Path, typer.Option("--out-dir", help="Where run folders go.")] = Path(
         "runs"

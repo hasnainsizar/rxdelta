@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from rxdelta.ask.answer import (
@@ -233,12 +235,28 @@ SELECT pairs.f_from, pairs.f_to, y.ndc_11, {_NULL_SIDE}, {_SIDE.format(p="y")}
 """
 
 # One branch per change type over the joined rows. a_* is the earlier month.
+# Additions and removals are of the RXCUI. When a formulary swaps the NDC that
+# stands for an RXCUI, the old and new NDC rows are paired as one before and
+# after, so a swap is no change unless the coverage itself moved.
 _CLASSIFY_SQL = f"""
 WITH j(f_from, f_to, ndc, a_rxcui, a_tier, a_pa, a_st, a_ql, a_amt, a_days,
        b_rxcui, b_tier, b_pa, b_st, b_ql, b_amt, b_days) AS ({_JOINED_SQL}),
-both_sides AS (SELECT * FROM j WHERE a_rxcui IS NOT NULL AND b_rxcui IS NOT NULL)
-SELECT 'drug_added', * FROM j WHERE a_rxcui IS NULL
-UNION ALL SELECT 'drug_removed', * FROM j WHERE b_rxcui IS NULL
+gone AS (SELECT * FROM j WHERE b_rxcui IS NULL),
+new AS (SELECT * FROM j WHERE a_rxcui IS NULL),
+swaps AS (
+  SELECT g.f_from, g.f_to, g.ndc, g.a_rxcui, g.a_tier, g.a_pa, g.a_st, g.a_ql, g.a_amt, g.a_days,
+         n.b_rxcui, n.b_tier, n.b_pa, n.b_st, n.b_ql, n.b_amt, n.b_days
+    FROM gone g JOIN new n
+      ON n.f_from = g.f_from AND n.f_to = g.f_to AND n.b_rxcui = g.a_rxcui),
+both_sides AS (
+  SELECT * FROM j WHERE a_rxcui IS NOT NULL AND b_rxcui IS NOT NULL
+  UNION ALL SELECT * FROM swaps)
+SELECT 'drug_added', * FROM new
+ WHERE NOT EXISTS (SELECT 1 FROM formulary z WHERE z.snapshot_month = :m_from
+                   AND z.formulary_id = new.f_from AND z.rxcui = new.b_rxcui)
+UNION ALL SELECT 'drug_removed', * FROM gone
+ WHERE NOT EXISTS (SELECT 1 FROM formulary z WHERE z.snapshot_month = :m_to
+                   AND z.formulary_id = gone.f_to AND z.rxcui = gone.a_rxcui)
 UNION ALL SELECT 'tier_up', * FROM both_sides WHERE b_tier > a_tier
 UNION ALL SELECT 'tier_down', * FROM both_sides WHERE b_tier < a_tier
 UNION ALL SELECT 'prior_auth_added', * FROM both_sides WHERE b_pa = 1 AND a_pa = 0
@@ -256,7 +274,26 @@ UNION ALL SELECT 'quantity_limit_loosened', * FROM both_sides
 """
 
 
+_memo: dict[tuple[str, int, int, str, str], list[GoldChange]] = {}
+_memo_lock = threading.Lock()
+
+
+def _db_state(conn: sqlite3.Connection) -> tuple[str, int, int]:
+    path = str(conn.execute("PRAGMA database_list").fetchone()[2])
+    stat = Path(path).stat()
+    return path, stat.st_mtime_ns, stat.st_size
+
+
 def changes(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[GoldChange]:
+    """Every classified change for a month pair, memoized per database file state."""
+    key = (*_db_state(conn), month_from, month_to)
+    with _memo_lock:
+        if key not in _memo:
+            _memo[key] = _classify(conn, month_from, month_to)
+        return _memo[key]
+
+
+def _classify(conn: sqlite3.Connection, month_from: str, month_to: str) -> list[GoldChange]:
     params = {"m_from": month_from, "m_to": month_to}
     plans_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
     for plan, f_from, f_to in conn.execute(_PAIRS_SQL, params).fetchall():

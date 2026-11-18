@@ -385,6 +385,8 @@ EVENTS: tuple[_Event, ...] = (
     ("2026-03", F1, "8800251", "st", False),
     ("2026-03", F1, "8800161", "tier", 2),
     ("2026-03", F2, "8800102", "tier", 4),
+    # Moves tier in the same month its NDC is swapped, which the NDC diff alone misses.
+    ("2026-03", F2, "8800151", "tier", 4),
     ("2026-03", F2, "8800121", "pa", True),
     ("2026-03", F2, "8800191", "add", Row(3, False, False, (3, 30))),
     ("2026-03", F2, "8800201", "pa", True),
@@ -611,11 +613,28 @@ def _amount(value: float) -> str:
     return f"{value:g}"
 
 
+# Package codes replaced under the same RXCUI, as the real files do every month:
+# (first month, formulary, rxcui) to the NDC indexes used from then on. The diff
+# sees an NDC removed and one added; at the RXCUI grain nothing changed.
+NDC_SWAPS: dict[tuple[str, str, str], tuple[int, ...]] = {
+    ("2026-02", F2, "8800141"): (0, 2),
+    ("2026-03", F2, "8800151"): (1,),
+}
+
+
+def ndc_indexes(month: str, formulary: str, rxcui: str, count: int) -> tuple[int, ...]:
+    chosen = tuple(range(count))
+    for (start, swap_formulary, swap_rxcui), indexes in NDC_SWAPS.items():
+        if (swap_formulary, swap_rxcui) == (formulary, rxcui) and month >= start:
+            chosen = indexes
+    return chosen
+
+
 def formulary_rows(month: str, state: dict[tuple[str, str], Row]) -> list[list[str]]:
     ndc_counts = {p.rxcui: p.ndcs for p in PRODUCTS}
     rows = []
     for (formulary, rxcui), row in sorted(state.items()):
-        for index in range(ndc_counts[rxcui]):
+        for index in ndc_indexes(month, formulary, rxcui, ndc_counts[rxcui]):
             rows.append(
                 [
                     formulary,

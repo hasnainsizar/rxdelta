@@ -512,6 +512,8 @@ def test_eval_cli_run_and_compare(eval_db: Path, tmp_path: Path) -> None:
         [
             "eval",
             "run",
+            "--set",
+            str(EVAL_SET),
             "--runner",
             "oracle",
             "--split",
@@ -531,6 +533,8 @@ def test_eval_cli_run_and_compare(eval_db: Path, tmp_path: Path) -> None:
         [
             "eval",
             "run",
+            "--set",
+            str(EVAL_SET),
             "--runner",
             "null",
             "--split",
@@ -548,8 +552,22 @@ def test_eval_cli_run_and_compare(eval_db: Path, tmp_path: Path) -> None:
     assert "Right to wrong" in compared.output
 
     noisy = runner.invoke(
-        app, ["eval", "run", "--runner", "noisy", "--db", str(eval_db), "--out-dir", str(out)]
+        app,
+        [
+            "eval",
+            "run",
+            "--set",
+            str(EVAL_SET),
+            "--runner",
+            "noisy",
+            "--db",
+            str(eval_db),
+            "--out-dir",
+            str(out),
+        ],
     )
     assert noisy.exit_code == 1 and "No runner named 'noisy'" in noisy.output
-    bad_split = runner.invoke(app, ["eval", "run", "--split", "train", "--db", str(eval_db)])
+    bad_split = runner.invoke(
+        app, ["eval", "run", "--set", str(EVAL_SET), "--split", "train", "--db", str(eval_db)]
+    )
     assert bad_split.exit_code == 1

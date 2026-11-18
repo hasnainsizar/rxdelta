@@ -75,8 +75,8 @@ def ask_conn(ask_db: Path) -> Iterator[sqlite3.Connection]:
 
 
 REPO = Path(__file__).resolve().parents[1]
-EVAL_SET = REPO / "evals" / "rxdelta_v1.jsonl"
-HANDWRITTEN = REPO / "evals" / "handwritten.jsonl"
+EVAL_SET = REPO / "evals" / "rxdelta_fixture_v1.jsonl"
+HANDWRITTEN = REPO / "evals" / "handwritten_fixture.jsonl"
 
 
 def build_cli_eval_db(path: Path) -> Path:

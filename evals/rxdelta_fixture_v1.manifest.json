@@ -1,7 +1,7 @@
 {
-  "eval_set": "rxdelta_v1",
-  "file": "rxdelta_v1.jsonl",
-  "file_sha256": "283e1f4bada061b3565e1aaf4e76b6ed9e107d55d719c03a1be48c4dc415e307",
+  "eval_set": "rxdelta_fixture_v1",
+  "file": "rxdelta_fixture_v1.jsonl",
+  "file_sha256": "a9e3ba82b516fe1b3eec30fdad3e67c625352b0e6ba94d9717320b415d0960f7",
   "builder_version": "1.0",
   "seed": 7,
   "n_generated": 200,
