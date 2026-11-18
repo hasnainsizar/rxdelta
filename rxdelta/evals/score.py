@@ -119,16 +119,10 @@ def _over_cap(item: EvalItem, got: StructuredAnswer) -> OverCapPath:
         return "count" if got.count == expected.count and got.unit == "drugs" else "missed"
     if not isinstance(got, DrugListAnswer):
         return "missed"
-    if set(got.rxcuis) == set(full.rxcuis):
-        return "full_list"
-    if (
-        got.truncated
-        and got.total == expected.count
-        and got.rxcuis
-        and set(got.rxcuis) <= set(full.rxcuis)
-    ):
-        return "truncated_list"
-    return "missed"
+    if got.truncated:
+        right = got.total == expected.count and got.rxcuis and set(got.rxcuis) <= set(full.rxcuis)
+        return "truncated_list" if right else "missed"
+    return "full_list" if set(got.rxcuis) == set(full.rxcuis) else "missed"
 
 
 def _correct(

@@ -571,3 +571,22 @@ def test_eval_cli_run_and_compare(eval_db: Path, tmp_path: Path) -> None:
         app, ["eval", "run", "--set", str(EVAL_SET), "--split", "train", "--db", str(eval_db)]
     )
     assert bad_split.exit_code == 1
+
+
+def test_over_cap_scoring_paths(config: Config) -> None:
+    full = DrugListAnswer(rxcuis=["1", "2", "3"], total=3)
+    item = _item(CountAnswer(count=3), category="over_cap").model_copy(update={"alternative": full})
+
+    def path(got: StructuredAnswer) -> tuple[bool, str | None]:
+        result = score_item(item, _out(got), config)
+        return result.correct, result.over_cap_path
+
+    assert path(CountAnswer(count=3)) == (True, "count")
+    assert path(CountAnswer(count=4)) == (False, "missed")
+    assert path(DrugListAnswer(rxcuis=["1"], truncated=True, total=3)) == (True, "truncated_list")
+    # A partial list must say it is partial, state the right total and hold no stranger.
+    assert path(DrugListAnswer(rxcuis=["1"], truncated=True, total=2)) == (False, "missed")
+    assert path(DrugListAnswer(rxcuis=["1", "9"], truncated=True, total=3)) == (False, "missed")
+    assert path(DrugListAnswer(rxcuis=["1"])) == (False, "missed")
+    assert path(DrugListAnswer(rxcuis=["3", "2", "1"])) == (True, "full_list")
+    assert path(NoDataAnswer(reason=NoDataReason.no_matching_changes)) == (False, "missed")

@@ -203,7 +203,9 @@ TEMPLATES: dict[str, tuple[Template, ...]] = {
     ),
     "over_cap": (
         Template(
-            "over_cap.formal.1", "List every drug that {change} between {from} and {to}.", "formal"
+            "over_cap.formal.1",
+            "List all of the drugs that {change} between {from} and {to}.",
+            "formal",
         ),
         Template(
             "over_cap.formal.2",
