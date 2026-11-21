@@ -1733,7 +1733,7 @@ imports it, and the reverse would be circular. `loaded_months` stays in
 range the pass was pointed at, but the owner asked for any clear dead code.
 
 **The repo had to leave a synced folder first.** On the macOS Desktop under
-iCloud sync, the checkout gained about 145 conflict copies (`file 2.py`,
+iCloud sync, the checkout gained about 270 conflict copies outside `.venv` (`file 2.py`,
 `rxdelta-cms 14.db-wal`, `.git/index 2`), new copies appeared while the baseline
 was written, and the sync set the hidden flag on `.venv`'s `.pth` files, which
 Python 3.12 skips, so the `rxdelta` command could not import itself. The repo
