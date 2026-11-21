@@ -1703,3 +1703,45 @@ still matches exactly: none of its ten recorded drafts used a numbered list.
 
 Not done yet. `evals/paraphrase_candidates.csv` in the repo has no approved rows,
 so there is nothing to build the paraphrase set from.
+
+## Part 8: simplification
+
+A pass meant to make the code smaller with the same behavior. The details,
+numbers and what was left are in `docs/simplify-report.md`.
+
+**Only low risk items were done.** A first read estimated 300 to 350 removable
+lines in low and medium risk work, about 3 percent of the 11,569 lines of
+non-test code, against the 10 percent the pass set as worth doing. The owner
+chose to do the duplicated helpers and clear dead code only: 43 counted lines
+in six commits. Would change: a structural review that finds larger wins.
+
+**Every change is held to byte identical output.** `scripts/simplify_check.sh`
+saves the output of `summary`, `diff` and `report` on the synthetic sample and
+the three real month pairs, the tool schemas, the `submit_answer` schema, both
+prompts, one real call per tool and a rescore of every saved run, and compares
+the branch against it. Two full runs on the untouched branch matched each other
+before any change, so a difference means a change, not noise. The `--fast` mode
+(tests, lint, both oracles, replay) ran after every commit.
+
+**Duplicates kept the copy with more callers or the right home.** `rate` and
+`percentile` live in `evals/agent_metrics.py` because `harness.py` already
+imports it, and the reverse would be circular. `loaded_months` stays in
+`db/queries.py`, the database layer, and the tools import it from there.
+
+**Dead code from before Phase 1 was removed too.** `formulary_coverage`,
+`embedded_bytes` and `plan_list` were already unused at `76e60f0`, outside the
+range the pass was pointed at, but the owner asked for any clear dead code.
+
+**The repo had to leave a synced folder first.** On the macOS Desktop under
+iCloud sync, the checkout gained about 145 conflict copies (`file 2.py`,
+`rxdelta-cms 14.db-wal`, `.git/index 2`), new copies appeared while the baseline
+was written, and the sync set the hidden flag on `.venv`'s `.pth` files, which
+Python 3.12 skips, so the `rxdelta` command could not import itself. The repo
+moved to `~/code/rxdelta_main`; the `" 2"` copies and `.git/index 2` were
+deleted, `git fsck --full` found nothing wrong, `.venv` was rebuilt, and the
+database's row counts were checked against the eval manifest before the
+baseline was recorded.
+
+**Skills.** thermo-nuclear (only the owner can start it) did not run once the
+pass was narrowed. pstack is installed but disabled, because it registers a
+SessionStart hook; its skills were followed from their files.
