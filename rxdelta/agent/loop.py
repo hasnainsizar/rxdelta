@@ -31,7 +31,7 @@ from rxdelta.config import Config, GuardsConfig, ModelPrices
 from rxdelta.tools.context import ToolContext
 from rxdelta.tools.registry import call_tool
 
-GUARDS = ("schema", "grounding", "consistency")
+GUARDS = ("schema", "grounding", "consistency", "values")
 REMINDER = (
     "You stopped without an answer. Finish by calling submit_answer with the structured "
     "answer and final_text."
@@ -342,6 +342,11 @@ class AgentRunner:
             str(text), run.question, [c.result for c in run.calls]
         )
         consistency = guards.consistency_problems(answer, str(text)) if answer is not None else []
+        values = (
+            guards.value_problems(answer, [c.result for c in run.calls if c.name == "get_changes"])
+            if answer is not None
+            else []
+        )
         run.drafts.append(
             {
                 "answer": raw.get("answer"),
@@ -350,6 +355,7 @@ class AgentRunner:
                 "schema_problems": schema,
                 "ungrounded": ungrounded,
                 "consistency_problems": consistency,
+                "value_problems": values,
             }
         )
         if schema:
@@ -361,6 +367,7 @@ class AgentRunner:
         checks = (
             ("grounding", [guards.grounding_message(ungrounded)] if ungrounded else []),
             ("consistency", consistency),
+            ("values", values),
         )
         for guard, problems in checks:
             if not problems:
