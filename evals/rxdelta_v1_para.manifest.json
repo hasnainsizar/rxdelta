@@ -1,0 +1,27 @@
+{
+  "eval_set": "rxdelta_v1_para",
+  "file": "rxdelta_v1_para.jsonl",
+  "file_sha256": "85d0e5641792d14856e0600eea1f9ee549919418d13501fe435a10bce3657035",
+  "items": 31,
+  "source_set": "evals/rxdelta_v1.jsonl",
+  "source_set_sha256": "7a5c81b4fe3bfd3f3c9a5ee50668a4ee9f6eaec99fb90b91bbf6cee088d1c9c3",
+  "paraphrases_csv": "evals/paraphrase_candidates.csv",
+  "paraphrases_csv_sha256": "d5e41501a6525620578723eef6e5670d2a02aaf45284ec0afd4135bdd7486ed1",
+  "months": [
+    "2026-05",
+    "2026-06",
+    "2026-07"
+  ],
+  "releases": {
+    "2026-05": "2026_20260513",
+    "2026-06": "2026_20260610",
+    "2026-07": "2026_20260722"
+  },
+  "db_row_counts": {
+    "formulary": 3372376,
+    "plan_info": 16554,
+    "beneficiary_cost": 517765,
+    "drug_names": 18607,
+    "ingest_log": 9
+  }
+}
