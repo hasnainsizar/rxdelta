@@ -174,7 +174,7 @@ eval-null:
 # model and needs ANTHROPIC_API_KEY. Spend is logged to runs/spend.jsonl and
 # capped by [agent].budget_usd.
 MODEL   ?= claude-haiku-5-5
-PROMPT  ?= v1
+PROMPT  ?= v3
 REPEATS ?= 3
 CASSETTE ?= tests/cassettes/agent_fixture.jsonl
 

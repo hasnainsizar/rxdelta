@@ -656,3 +656,55 @@ def test_only_real_failures_are_errors() -> None:
         "unknown_plan",
         "internal",
     }
+
+
+def test_get_coverage_batch_matches_single_calls(ctx: ToolContext) -> None:
+    wanted = ["8800101", "8800341", "8800102"]
+    result = call(ctx, "get_coverage", rxcuis=wanted, month="2026-03", formulary_id="00026124")
+    assert result.ok and result.data is not None and result.data.drugs is not None
+    assert [d.rxcui for d in result.data.drugs] == wanted
+    assert [d.covered for d in result.data.drugs] == [True, False, True]
+    assert result.total == 3
+    assert result.note is not None and "1 of 3 drugs are not on formulary 00026124" in result.note
+    for drug in result.data.drugs:
+        single = call(
+            ctx, "get_coverage", rxcui=drug.rxcui, month="2026-03", formulary_id="00026124"
+        )
+        assert single.data is not None and single.data.drugs is None
+        assert drug.rows == single.data.rows
+        assert drug.display_name == single.data.display_name
+    assert len(result.provenance.row_keys) == sum(
+        len(r.ndcs) for d in result.data.drugs for r in d.rows
+    )
+
+
+def test_get_coverage_batch_by_plan_and_its_errors(ctx: ToolContext, config: Config) -> None:
+    by_plan = call(ctx, "get_coverage", rxcuis=["8800141"], month="2026-03", plan_id="H1234-001")
+    assert by_plan.ok and by_plan.data is not None and by_plan.data.drugs is not None
+    assert by_plan.data.formulary_id == F1 and by_plan.data.drugs[0].covered
+    for args, message in (
+        ({"rxcuis": ["8800141"]}, "rxcuis needs formulary_id or plan_id"),
+        ({"rxcui": "8800141", "rxcuis": ["8800141"], "formulary_id": F1}, "exactly one"),
+        ({"formulary_id": F1}, "exactly one"),
+        ({"rxcuis": [], "formulary_id": F1}, "at least 1"),
+    ):
+        bad = call(ctx, "get_coverage", month="2026-03", **args)
+        assert bad.error is not None and bad.error.code == ErrorCode.INVALID_ARGS
+        assert message in bad.error.message
+    unknown = call(
+        ctx, "get_coverage", rxcuis=["8800141", "99999999"], month="2026-03", formulary_id=F1
+    )
+    assert unknown.error is not None and unknown.error.code == ErrorCode.UNKNOWN_DRUG
+    assert "99999999" in unknown.error.message
+    capped = replace(
+        config,
+        tools=config.tools.model_copy(
+            update={"row_caps": {**config.tools.row_caps, "get_coverage_rxcuis": 1}}
+        ),
+    )
+    over = call_tool(
+        "get_coverage",
+        {"rxcuis": ["8800141", "8800101"], "month": "2026-03", "formulary_id": F1},
+        ToolContext(db_path=ctx.db_path, config=capped),
+    )
+    assert over.error is not None and "At most 1 RXCUIs per call" in over.error.message

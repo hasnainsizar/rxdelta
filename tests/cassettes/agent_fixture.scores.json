@@ -2,7 +2,7 @@
   "correct": {
     "rxd-v1-0001": true,
     "rxd-v1-0021": true,
-    "rxd-v1-0051": false,
+    "rxd-v1-0051": true,
     "rxd-v1-0071": true,
     "rxd-v1-0101": true,
     "rxd-v1-0121": true,
@@ -27,7 +27,7 @@
     },
     "max_tokens": 32000,
     "model": "claude-haiku-5-5",
-    "prompt_version": "v1"
+    "prompt_version": "v3"
   },
   "split": "all",
   "stratified": true

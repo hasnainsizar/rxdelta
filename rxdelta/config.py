@@ -176,11 +176,14 @@ class MatchConfig(_Section):
         return self
 
 
-ToolName = Literal["find_drug", "find_plan", "get_coverage", "get_changes", "count_changes"]
+ToolName = Literal[
+    "find_drug", "find_plan", "get_coverage", "get_coverage_rxcuis", "get_changes", "count_changes"
+]
 
 
 class ToolsConfig(_Section):
     default_page_size: int = Field(ge=1)
+    diff_memo_pairs: int = Field(ge=1)
     row_caps: dict[ToolName, int]
 
     @model_validator(mode="after")

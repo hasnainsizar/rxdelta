@@ -1,0 +1,94 @@
+{
+  "eval_set": "rxdelta_units_v1",
+  "file": "rxdelta_units_v1.jsonl",
+  "file_sha256": "b478c0eda6a23240d9e90964e2fa88473ed5a7df51c318a49cdc2d8ce07811ab",
+  "builder_version": "1.0",
+  "seed": 7,
+  "n_generated": 0,
+  "n_handwritten": 12,
+  "items": 12,
+  "months": [
+    "2026-05",
+    "2026-06",
+    "2026-07"
+  ],
+  "month_range": [
+    "2026-05",
+    "2026-07"
+  ],
+  "releases": {
+    "2026-05": "2026_20260513",
+    "2026-06": "2026_20260610",
+    "2026-07": "2026_20260722"
+  },
+  "counts": {
+    "coverage_lookup": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "drug_change": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "filtered_list": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "count": {
+      "dev": 8,
+      "test": 4,
+      "total": 12
+    },
+    "over_cap": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "cost": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "multi_step": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "no_answer": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "ambiguous": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "out_of_scope": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    },
+    "typo": {
+      "dev": 0,
+      "test": 0,
+      "total": 0
+    }
+  },
+  "splits": {
+    "dev": 8,
+    "test": 4
+  },
+  "shortfalls": {},
+  "db_row_counts": {
+    "formulary": 3372376,
+    "plan_info": 16554,
+    "beneficiary_cost": 517765,
+    "drug_names": 18607,
+    "ingest_log": 9
+  },
+  "config_sha256": "81fd0c11133b0e4f3edcca30f865cc71727c9c829bfbb8cafc648a8da01c787d"
+}

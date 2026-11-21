@@ -52,3 +52,15 @@ What is still open after Phase 2, each with why it matters.
   count, the change types, a few examples, the months) while the structured
   answer carries every row, so a person reads a paragraph and the scorer gets
   the full set.
+
+## Done in Phase 3 (Part 9 of DECISIONS.md)
+
+The batch coverage tool, the bounded diff memo, the over asking on
+`rxd-v1-0044`, summaries for long answers, and `count_changes` units.
+
+- **Check before and after values against the rows they came from.** Under v3
+  the misses on `rxd-v1-0044` and `rxd-v1-0040` had the right drug, formulary
+  and change, with the `after` value rewritten as the whole coverage record
+  instead of copied. A consistency check that every `change` item's before and
+  after equal a row `get_changes` returned in the run would send these back for
+  a retry, the same way the grounding check handles numbers.

@@ -27,6 +27,12 @@ _PARTIAL = re.compile(
     r"truncated|more than|only (?:the )?first|showing|of \d[\d,]* (?:drugs|results|rows))\b",
     re.IGNORECASE,
 )
+_UNIT_WORDS = {
+    "drugs": re.compile(r"\b(drugs?|medications?|medicines?|products?)\b", re.IGNORECASE),
+    "formularies": re.compile(r"\bformular(y|ies)\b", re.IGNORECASE),
+    "plans": re.compile(r"\bplans?\b", re.IGNORECASE),
+    "rows": re.compile(r"\b(rows?|changes?|entries|combinations?)\b", re.IGNORECASE),
+}
 _SELF_TALK = re.compile(
     r"\b(as an ai|as a language model|i am an ai|i'm an ai|as an assistant)\b", re.IGNORECASE
 )
@@ -59,10 +65,17 @@ def consistency_problems(answer: StructuredAnswer, text: str) -> list[str]:
         return ["final_text is empty; write the answer for the person who asked."]
     if _SELF_TALK.search(text):
         problems.append("final_text talks about itself as an AI; state the facts plainly.")
-    if isinstance(answer, CountAnswer) and not _has_number(text, answer.count):
-        problems.append(
-            f"The answer's count is {answer.count} but final_text does not state {answer.count}."
-        )
+    if isinstance(answer, CountAnswer):
+        if not _has_number(text, answer.count):
+            problems.append(
+                f"The answer's count is {answer.count} but final_text does not state "
+                f"{answer.count}."
+            )
+        if not _UNIT_WORDS[answer.unit].search(text):
+            problems.append(
+                f"The count is in {answer.unit}, but final_text does not say what it counts. "
+                "Name the unit (drugs, formularies, plans, or changes for rows)."
+            )
     if isinstance(answer, DrugListAnswer) and answer.truncated:
         if answer.total is None:
             problems.append(

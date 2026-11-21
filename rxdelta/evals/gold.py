@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 import sqlite3
-import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +35,7 @@ from rxdelta.ask.answer import (
 )
 from rxdelta.ask.values import CoverageState, change_values
 from rxdelta.config import Config, get_config
+from rxdelta.memo import LruMemo
 from rxdelta.swaps import pair_swaps
 from rxdelta.types import ChangeType
 
@@ -291,8 +291,7 @@ def _change_types(before: CoverageState, after: CoverageState) -> list[ChangeTyp
     return found
 
 
-_memo: dict[tuple[str, int, int, str, str], list[GoldChange]] = {}
-_memo_lock = threading.Lock()
+_memo: LruMemo[list[GoldChange]] = LruMemo()
 
 
 def _db_state(conn: sqlite3.Connection) -> tuple[str, int, int]:
@@ -305,11 +304,12 @@ def changes(
     conn: sqlite3.Connection, month_from: str, month_to: str, config: Config | None = None
 ) -> list[GoldChange]:
     """Every classified change for a month pair, memoized per database file state."""
-    key = (*_db_state(conn), month_from, month_to)
-    with _memo_lock:
-        if key not in _memo:
-            _memo[key] = _classify(conn, config or get_config(), month_from, month_to)
-        return _memo[key]
+    chosen = config or get_config()
+    return _memo.get(
+        (*_db_state(conn), month_from, month_to),
+        lambda: _classify(conn, chosen, month_from, month_to),
+        chosen.tools.diff_memo_pairs,
+    )
 
 
 # Cost direction, read again from the raw beneficiary cost rows.
@@ -574,7 +574,17 @@ def count_drugs(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAns
     rows = filtered_changes(conn, args)
     if not rows:
         return NoDataAnswer(reason=NoDataReason.no_matching_changes)
-    return CountAnswer(count=len({r.rxcui for r in rows}), unit="drugs")
+    unit = str(args.get("unit", "drugs"))
+    counts = {
+        "drugs": len({r.rxcui for r in rows}),
+        # A row is one drug, formulary and change type, as the tools count it.
+        "rows": len(rows),
+        "formularies": len({r.formulary_to for r in rows}),
+        "plans": len(frozenset().union(*(r.plans for r in rows))),
+    }
+    if unit not in counts:
+        raise GoldError(f"unknown count unit {unit!r}; units: {', '.join(counts)}")
+    return CountAnswer(count=counts[unit], unit=unit)  # type: ignore[arg-type]
 
 
 def over_cap(conn: sqlite3.Connection, args: dict[str, Any]) -> tuple[CountAnswer, DrugListAnswer]:
