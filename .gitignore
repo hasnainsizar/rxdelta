@@ -35,3 +35,7 @@ runs/
 
 .env
 .DS_Store
+
+# Working instructions and the build plan, kept local.
+/CLAUDE.md
+/docs/rxdelta_saas_plan.md
