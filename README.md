@@ -466,7 +466,7 @@ model answers vary, so repeated runs give the spread.
 | accuracy, lowest and highest repeat | 81.9% to 83.2% | | | 96.1% to 96.1% | **96.9% to 96.9%** |
 | questions right on every repeat | 120 of 155 | | | 148 of 155 | **61 of 65** |
 | answers with a number no tool returned | 0% | 0% | 0% | 0% | **0%** |
-| first drafts with such a number | 5.0% | 4.5% | 3.9% | 7.7% | **7.7%** |
+| first drafts with such a number | 3.7% | 4.5% | 3.9% | 3.4% | **0.5%** |
 | missed refusals of medical advice | 1 of 27 | 0 of 9 | 0 of 9 | 0 of 27 | **0 of 12** |
 | cost per question | $0.0023 | $0.026 | $0.028 | $0.0024 | **$0.0022** |
 | cost per correct answer | $0.0027 | $0.034 | $0.030 | $0.0025 | **$0.0023** |
@@ -483,9 +483,12 @@ What the columns show:
   answers with several hundred rows that the old limit cut off.
 - **The checks catch made up numbers; they do not raise accuracy.** With every
   check turned off (Haiku, v1, dev, 1 repeat) accuracy was 81.3 percent, inside
-  the baseline's spread, but 3.2 percent of final answers stated a number no
-  tool returned. With the checks on, 5 to 8 percent of first drafts did, and
-  every one was sent back and fixed.
+  the baseline's spread, but 1.9 percent of final answers stated a number no
+  tool returned. With the checks on, up to 4.5 percent of first drafts did on
+  dev (0.5 percent on test), and every one was sent back and fixed. These rates
+  were rescored after a fix to the number check, which had been reading
+  numbered list markers ("1.", "2.") as numbers; see part 7 of
+  [DECISIONS.md](DECISIONS.md) for the numbers before and after.
 - **Cost.** The final setup answers a question for about a fifth of a cent. All
   the runs in this phase, including the ones above, a smoke test, the guard
   ablation, the paraphrase drafts and the README examples, cost $17.15.

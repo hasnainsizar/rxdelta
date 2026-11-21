@@ -38,3 +38,17 @@ What is still open after Phase 2, each with why it matters.
   checks tiers drug by drug; the agent answered it in 5 calls with the
   `tier_to` filter on `get_changes`, so a batch tool would not change that one.
   The tools were not changed during the Phase 2 runs.
+- **Stop asking about a product the question names.** On the test split,
+  `rxd-v1-0044` ("any changes to brivaracetam 50 mg oral tablet on 00026109")
+  failed on every repeat: the model looked up only "brivaracetam", saw the
+  generic and Briviact, and asked which one, although the question names the
+  generic tablet. `h10` on dev is the same habit. A v3 prompt (judged on dev)
+  should tell it to look up the name as written, with strength and form, and to
+  ask only when that lookup still returns several products.
+- **Summarize long answers in the text, keep the full list in the structured
+  answer.** v2 makes the model put every row in `final_text` as well as in the
+  answer, and three dev questions with 300 or more rows still fail because the
+  prompt allows a count past 300. The text should give a short summary (the
+  count, the change types, a few examples, the months) while the structured
+  answer carries every row, so a person reads a paragraph and the scorer gets
+  the full set.

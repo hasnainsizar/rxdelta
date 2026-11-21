@@ -41,10 +41,12 @@ repeats, so one item can be wrong up to 3 times).
 | **total** | **35** | **81** | **36** |
 
 The three empty middle rows are the guards and the v1 rules working, not the
-model being careful by itself: 5 percent of Haiku's first drafts had an
-ungrounded number and the grounding guard sent every one back (23 retries, 23
-fixed), and the cost rule held, with no answer reading a tier number as a
-price.
+model being careful by itself: 3.7 percent of Haiku's first drafts had an
+ungrounded number and the grounding guard sent every one back, and the cost
+rule held, with no answer reading a tier number as a price. (The guard fired
+23 times in run 1; 6 of those were numbered list markers that the number check
+then wrongly read as numbers, since fixed. The 3.7 percent is the rescored
+rate; it was first reported as 5 percent.)
 
 **No gold errors.** Several items looked surprising (a "did X change" item
 whose answer is 328 removal rows; "Eliquis 5 mg" covering the starter pack

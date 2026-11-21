@@ -1550,6 +1550,13 @@ also run on Sonnet (1 repeat, about $4.50 each time) to answer the question the
 extra run was asked for: whether the prompt closes the gap between models. It
 does; under v2 the two are within a point or two.
 
+> Superseded in part. The grounding rates below were measured with a number
+> check that read numbered list markers as numbers. Rescored, the final
+> ungrounded rate with the guards off is 1.9 percent, first drafts with the
+> guards on are 3.4 to 4.5 percent on dev and 0.5 percent on test, and many of
+> the "fixed" retries were false alarms. See
+> [Numbered list markers](#numbered-list-markers-were-read-as-numbers).
+
 **What the guards are worth.** With all three off (run 3), accuracy was 81.3
 percent, inside run 1's spread, so the guards do not buy accuracy. They buy
 clean answers: 3.2 percent of final answers stated a number no tool returned
@@ -1625,3 +1632,74 @@ same and only `config_sha256` changed in the manifest.
   the wrong shape, which says the interface, not the model, was unclear.
 - Size `max_tokens` from the largest answer the eval expects (a few hundred
   change rows) instead of from a typical one.
+
+### Repeats that agree
+
+**The repeats are independent; only their totals matched.** The final dev run
+scored 96.1 percent on each of its three repeats and the test run 96.9 percent
+on each, which could mean the repeats reused one answer. They did not:
+
+| run | right on every repeat | some | none |
+|---|---|---|---|
+| dev, Haiku, v2 (`20261118T213117Z_agent_dev-2`) | 148 | 2 (`0035`, `h10`) | 5 |
+| test, Haiku, v2 (`20261118T215940Z_agent_test`) | 61 | 3 (`0048`, `0149`, `0176`) | 1 |
+
+On dev, `0035` failed only on repeat 3 and `h10` passed only on repeat 3, so
+each repeat missed exactly 6; on test each missed exactly 2. Every answer was
+its own API call: neither run used `--replay`, and prompt caching reuses only
+the input prefix, never a response. The answers differ too: for 142 of 155 dev
+items (60 of 65 on test) the three final texts are all different, nearly every
+item has three different output token counts, and 98 dev items took a
+different sequence of tool calls on at least one repeat. No temperature is
+sent, so the API default (1.0) applies; Claude Haiku 5.5 rejects any other
+sampling setting.
+
+### Numbered list markers were read as numbers
+
+**What was wrong.** `grounding.check` took every number in `final_text` as a
+claim, including the "1." and "2." that open the lines of a numbered list. A
+list marker is in no tool result, so a correct answer written as a list was
+"ungrounded". The scorer and the runtime guard share the function, so both
+were affected: the guard sent correct drafts back, and the summaries counted
+them as made up numbers.
+
+**The fix.** A number of up to three digits followed by `.` or `)` and a space,
+at the start of a line, is dropped before numbers are read. "Step 1." in the
+middle of a sentence is still a claim. Tests cover both, and a loop test checks
+that a clarifying question written as a numbered list passes the guard first
+time.
+
+**Rescored, with no API calls.** `rxdelta eval rescore <run dirs>` scores a saved
+run's answers again with the current scorer and writes `summary.rescored.json`
+beside the untouched `summary.json`, so the numbers first reported stay on
+record. All 13 saved runs were rescored. Accuracy did not change in any of them;
+grounding is not part of correctness. Five runs changed:
+
+| run | metric | before | after |
+|---|---|---|---|
+| run 1, Haiku, v1 | first draft ungrounded | 4.95% | 3.66% |
+| run 3, Haiku, v1, guards off | items with ungrounded numbers | 5 | 3 |
+| run 3 | ungrounded numbers in total | 15 | 3 |
+| run 3 | first draft and final ungrounded | 3.23% | 1.94% |
+| Haiku, v2, 8,192 tokens | first draft ungrounded | 8.39% | 4.73% |
+| Haiku, v2, 32,000 tokens | first draft ungrounded | 7.74% | 3.44% |
+| test, Haiku, v2 | first draft ungrounded | 7.69% | 0.51% |
+
+The Sonnet runs did not change: Sonnet rarely numbers its lists. Counting every
+draft the guard flagged, not only first drafts, the false alarms were 6 of 23 in
+run 1, 17 of 40 and 20 of 38 in the two Haiku v2 dev runs, and 14 of 15 on test.
+So the earlier claim that the grounding guard caught made up numbers in 5 to 8
+percent of first drafts overstated it: on test, nearly every retry was a list
+marker. The guard still matters on dev (3 to 5 percent of first drafts, every
+one fixed) and with the guards off 1.9 percent of final answers carried a made
+up number. The README and the error analysis now quote the rescored rates.
+
+**The runs were not repeated with the fixed guard.** A false alarm cost the
+model one retry, which it passed by rewriting the list; it did not change any
+answer's correctness, so the accuracy numbers stand. The cassette replay test
+still matches exactly: none of its ten recorded drafts used a numbered list.
+
+### Paraphrase run
+
+Not done yet. `evals/paraphrase_candidates.csv` in the repo has no approved rows,
+so there is nothing to build the paraphrase set from.
