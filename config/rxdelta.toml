@@ -241,6 +241,10 @@ near_miss_limit = 5
 [tools]
 # Rows a list tool returns when the caller does not pass a limit.
 default_page_size = 25
+# Month pairs whose classified changes stay in memory per process. On the real
+# files one pair takes about ten seconds to build and holds tens of thousands of
+# rows; older pairs are dropped first.
+diff_memo_pairs = 4
 
 # Most rows any one call can return. Past this the result is marked truncated,
 # the full total is given, and the note says how to narrow the query.

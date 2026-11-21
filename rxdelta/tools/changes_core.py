@@ -9,7 +9,6 @@ redone here.
 from __future__ import annotations
 
 import sqlite3
-import threading
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from rxdelta.config import Config
 from rxdelta.db import queries
 from rxdelta.diff.cost_direction import CostDirection, directions
 from rxdelta.diff.engine import diff_snapshots
+from rxdelta.memo import LruMemo
 from rxdelta.tools.common import (
     CoverageValues,
     Month,
@@ -108,8 +108,7 @@ class ChangeFilters(ToolInput):
         return ", ".join(parts)
 
 
-_memo: dict[tuple[str, int, int, str, str], list[ChangeRow]] = {}
-_memo_lock = threading.Lock()
+_memo: LruMemo[list[ChangeRow]] = LruMemo()
 
 
 def _memo_key(db_path: Path, month_from: str, month_to: str) -> tuple[str, int, int, str, str]:
@@ -121,13 +120,11 @@ def all_rows(
     conn: sqlite3.Connection, db_path: Path, config: Config, month_from: str, month_to: str
 ) -> list[ChangeRow]:
     """Every change row for the month pair, memoized per database file state."""
-    key = _memo_key(db_path, month_from, month_to)
-    with _memo_lock:
-        hit = _memo.get(key)
-        if hit is None:
-            hit = _build_rows(conn, config, month_from, month_to)
-            _memo[key] = hit
-    return hit
+    return _memo.get(
+        _memo_key(db_path, month_from, month_to),
+        lambda: _build_rows(conn, config, month_from, month_to),
+        config.tools.diff_memo_pairs,
+    )
 
 
 def _build_rows(
