@@ -457,20 +457,20 @@ releases): tuned on the dev split (155 questions), reported once on the
 held-out test split (65 questions). Each run asks every question 1 or 3 times;
 model answers vary, so repeated runs give the spread.
 
-| | dev, baseline | dev, v1 | dev, final | dev, final | **test, final** |
-|---|---|---|---|---|---|
-| model | Haiku 5.5 | Sonnet 5.5 | Sonnet 5.5 | Haiku 5.5 | **Haiku 5.5** |
-| system prompt | v1 | v1 | v2 | v2 | **v2** |
-| repeats | 3 | 1 | 1 | 3 | **3** |
-| accuracy (mean) | 82.6% | 76.8% | 94.2% | 96.1% | **96.9%** |
-| accuracy, lowest and highest repeat | 81.9% to 83.2% | | | 96.1% to 96.1% | **96.9% to 96.9%** |
-| questions right on every repeat | 120 of 155 | | | 148 of 155 | **61 of 65** |
-| answers with a number no tool returned | 0% | 0% | 0% | 0% | **0%** |
-| first drafts with such a number | 3.7% | 4.5% | 3.9% | 3.4% | **0.5%** |
-| missed refusals of medical advice | 1 of 27 | 0 of 9 | 0 of 9 | 0 of 27 | **0 of 12** |
-| cost per question | $0.0023 | $0.026 | $0.028 | $0.0024 | **$0.0022** |
-| cost per correct answer | $0.0027 | $0.034 | $0.030 | $0.0025 | **$0.0023** |
-| median time per question | 12.9 s | | | 11.1 s | **10.5 s** |
+| | dev, baseline | dev, v1 | dev, final | dev, final | **test, final** | dev, reworded |
+|---|---|---|---|---|---|---|
+| model | Haiku 5.5 | Sonnet 5.5 | Sonnet 5.5 | Haiku 5.5 | **Haiku 5.5** | Haiku 5.5 |
+| system prompt | v1 | v1 | v2 | v2 | **v2** | v2 |
+| repeats | 3 | 1 | 1 | 3 | **3** | 3 |
+| accuracy (mean) | 82.6% | 76.8% | 94.2% | 96.1% | **96.9%** | 95.7% |
+| accuracy, lowest and highest repeat | 81.9% to 83.2% | | | 96.1% to 96.1% | **96.9% to 96.9%** | 93.5% to 96.8% |
+| questions right on every repeat | 120 of 155 | | | 148 of 155 | **61 of 65** | 29 of 31 |
+| answers with a number no tool returned | 0% | 0% | 0% | 0% | **0%** | 0% |
+| first drafts with such a number | 3.7% | 4.5% | 3.9% | 3.4% | **0.5%** | 2.1% |
+| missed refusals of medical advice | 1 of 27 | 0 of 9 | 0 of 9 | 0 of 27 | **0 of 12** | 0 of 6 |
+| cost per question | $0.0023 | $0.026 | $0.028 | $0.0024 | **$0.0022** | $0.0029 |
+| cost per correct answer | $0.0027 | $0.034 | $0.030 | $0.0025 | **$0.0023** | $0.0030 |
+| median time per question | 12.9 s | | | 11.1 s | **10.5 s** | 10.7 s |
 
 What the columns show:
 
@@ -489,9 +489,17 @@ What the columns show:
   were rescored after a fix to the number check, which had been reading
   numbered list markers ("1.", "2.") as numbers; see part 7 of
   [DECISIONS.md](DECISIONS.md) for the numbers before and after.
+- **Casual rewording barely moves it.** "Dev, reworded" is 31 dev questions
+  rewritten the way someone without pharmacy terms might type them, drafted by
+  Haiku 5.5 and reviewed by hand. The same 31 questions in their original
+  wording scored 96.8 percent in the final dev run; reworded, 95.7 percent, one
+  wrong answer more in 93. Only one question passed in its original wording and
+  failed reworded, on one repeat of three: "dapagliflozin 5 mg tablets" without
+  "oral" matched the combination tablets too, and the model asked which one
+  was meant.
 - **Cost.** The final setup answers a question for about a fifth of a cent. All
   the runs in this phase, including the ones above, a smoke test, the guard
-  ablation, the paraphrase drafts and the README examples, cost $17.15.
+  ablation, the paraphrase drafts and run, and the README examples, cost $17.42.
 
 ### Where it fails
 
@@ -519,7 +527,8 @@ from 81 wrong answers in 465 to 18. The error analysis in
 It also still reaches for tier numbers when the cost data is missing, as in the
 Nurtec example above. The questions come from a few dozen templates, so these
 scores say how it handles the kinds of question in the set, not everything a
-person might type; reviewed casual paraphrases are the next check.
+person might type. Reviewed casual rewordings of 31 of them scored within a
+point of the originals (above), which is a small sample, not proof.
 
 ### The groundwork
 
