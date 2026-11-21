@@ -15,11 +15,12 @@ from rxdelta.evals.score import ItemScore
 GUARDS = ("schema", "grounding", "consistency")
 
 
-def _rate(numerator: int, denominator: int) -> float | None:
+def rate(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 4) if denominator else None
 
 
-def _percentile(values: list[float], share: float) -> float:
+def percentile(values: list[float], share: float) -> float:
+    """Nearest rank percentile; 0 for an empty list."""
     if not values:
         return 0.0
     ordered = sorted(values)
@@ -74,19 +75,19 @@ def agent_summary(
     settings = (traced[0][1].trace or {}).get("settings") or {}
     return {
         "settings": settings,
-        "first_draft_ungrounded_rate": _rate(sum(1 for d in with_draft if d), len(with_draft)),
-        "final_ungrounded_rate": _rate(
+        "first_draft_ungrounded_rate": rate(sum(1 for d in with_draft if d), len(with_draft)),
+        "final_ungrounded_rate": rate(
             sum(1 for _, _, s in traced if s.ungrounded_numbers), len(traced)
         ),
         "answers_with_a_draft": len(with_draft),
         "guards": _guard_stats([o for _, o, _ in traced]),
         "turns": {
             "mean": round(sum(turns) / len(turns), 3),
-            "p50": _percentile(turns, 0.5),
+            "p50": percentile(turns, 0.5),
             "max": max(turns),
         },
         "usage": dict(usage),
-        "cache_hit_share": _rate(usage["cache_read_tokens"], prompt),
+        "cache_hit_share": rate(usage["cache_read_tokens"], prompt),
         "cost_per_question": round(sum(o.cost_usd for _, o, _ in traced) / len(traced), 6),
         "cost_per_correct": _per_correct(traced),
         "errors": sum(1 for _, o, _ in traced if o.error),

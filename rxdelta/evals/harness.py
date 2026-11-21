@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import sqlite3
 import subprocess
 import threading
@@ -21,7 +20,7 @@ from rxdelta.agent.loop import ACCOUNT_ERROR, API_ERROR
 from rxdelta.ask.answer import NoDataAnswer, NoDataReason, Runner, RunnerOutput
 from rxdelta.config import CATEGORIES, Config
 from rxdelta.evals import report
-from rxdelta.evals.agent_metrics import agent_summary, repeat_summary
+from rxdelta.evals.agent_metrics import agent_summary, percentile, rate, repeat_summary
 from rxdelta.evals.items import EvalItem, manifest_path, read_items, sha256_file
 from rxdelta.evals.runners import make_runner
 from rxdelta.evals.score import ItemScore, score_item
@@ -137,15 +136,6 @@ def _answer(runner: Runner, item: EvalItem) -> RunnerOutput:
         )
 
 
-def percentile(values: list[float], share: float) -> float:
-    """Nearest rank percentile; 0 for an empty list."""
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    rank = max(1, math.ceil(share * len(ordered)))
-    return float(ordered[rank - 1])
-
-
 def _spread(values: list[float]) -> dict[str, float]:
     total = float(sum(values))
     return {
@@ -154,10 +144,6 @@ def _spread(values: list[float]) -> dict[str, float]:
         "p50": percentile(values, 0.50),
         "p95": percentile(values, 0.95),
     }
-
-
-def _rate(numerator: int, denominator: int) -> float | None:
-    return round(numerator / denominator, 4) if denominator else None
 
 
 def summarize(
@@ -179,7 +165,7 @@ def summarize(
         by_category[category] = {
             "items": len(members),
             "correct": sum(s.correct for s in members),
-            "accuracy": _rate(sum(s.correct for s in members), len(members)),
+            "accuracy": rate(sum(s.correct for s in members), len(members)),
             "mean_f1": round(sum(member_f1) / len(member_f1), 4) if member_f1 else None,
         }
     confusion: dict[str, dict[str, int]] = defaultdict(dict)
@@ -187,8 +173,8 @@ def summarize(
         Counter((s.expected_kind, s.got_kind) for s in scores).items()
     ):
         confusion[expected][got] = n
-    accuracy = _rate(correct, total) or 0.0
-    missed_rate = _rate(sum(s.missed_refusal for s in refusals), len(refusals)) or 0.0
+    accuracy = rate(correct, total) or 0.0
+    missed_rate = rate(sum(s.missed_refusal for s in refusals), len(refusals)) or 0.0
     reasons = []
     if accuracy < gates["min_accuracy"]:
         reasons.append(f"accuracy {accuracy:.4f} is below {gates['min_accuracy']:.4f}")
@@ -205,14 +191,14 @@ def summarize(
             "mean_f1_drug_list": round(sum(f1s) / len(f1s), 4) if f1s else None,
             "answerable": len(answerable),
             "false_refusals": sum(s.false_refusal for s in answerable),
-            "false_refusal_rate": _rate(sum(s.false_refusal for s in answerable), len(answerable)),
+            "false_refusal_rate": rate(sum(s.false_refusal for s in answerable), len(answerable)),
             "out_of_scope": len(refusals),
             "missed_refusals": sum(s.missed_refusal for s in refusals),
             "missed_refusal_rate": missed_rate if refusals else None,
-            "no_data_reason_match_rate": _rate(
+            "no_data_reason_match_rate": rate(
                 sum(bool(s.reason_match) for s in no_data), len(no_data)
             ),
-            "secondary_match_rate": _rate(
+            "secondary_match_rate": rate(
                 sum(bool(s.secondary_match) for s in secondary), len(secondary)
             ),
             "errors": sum(1 for s in scores if s.error),
@@ -222,7 +208,7 @@ def summarize(
         "clarify_paths": dict(Counter(s.clarify_path for s in scores if s.clarify_path)),
         "over_cap_paths": dict(Counter(s.over_cap_path for s in scores if s.over_cap_path)),
         "tools": {
-            "required_called_rate": _rate(sum(s.required_tools_called for s in scores), total),
+            "required_called_rate": rate(sum(s.required_tools_called for s in scores), total),
             "items_missing_required": sum(1 for s in scores if not s.required_tools_called),
             "mean_calls": round(sum(s.tool_calls for s in scores) / total, 4) if total else 0.0,
             "invalid_args_calls": sum(s.invalid_args_calls for s in scores),
@@ -230,7 +216,7 @@ def summarize(
         },
         "grounding": {
             "items_with_ungrounded": with_ungrounded,
-            "share_with_ungrounded": _rate(with_ungrounded, total),
+            "share_with_ungrounded": rate(with_ungrounded, total),
             "ungrounded_total": sum(len(s.ungrounded_numbers) for s in scores),
         },
         "cost_speed": {
