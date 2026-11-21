@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from rxdelta.config import Config
 from rxdelta.diff.impact import ChangeGroup, ImpactRange
 from rxdelta.types import ChangeType
@@ -126,7 +124,3 @@ def drug_label(name: str | None, ndc_11: str) -> str:
     """Primary line for the drug column. Falls back to the NDC when no name is
     cached, so the cell is never blank and never an error."""
     return name if name else ndc_display(ndc_11)
-
-
-def plan_list(plans: Sequence[object]) -> str:
-    return ", ".join(str(p) for p in plans)
