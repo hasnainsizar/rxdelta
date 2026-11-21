@@ -28,6 +28,8 @@ TOOL: list[dict[str, Any]] = [
     ("text", "claims", "ungrounded"),
     [
         ("Humalog Mix 75/25 moved to tier 4.", ["4"], []),
+        ("Two match:\n1. One on tier 4\n2. Another\n  3) A third", ["4"], []),
+        ("Step 1. It moved to tier 9.", ["1", "9"], ["1", "9"]),
         ("Humalog 75/25 is now tier 4", ["4"], []),
         ("The change is -$5.00 to $12.50 a month.", ["-$5.00", "$12.50"], []),
         ("It now costs $5 less.", ["$5"], []),

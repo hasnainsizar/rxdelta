@@ -1299,3 +1299,407 @@ it with something else. A test builds a set with `get_changes` capped at 5, wher
 the fixtures do produce over cap questions, and requires the oracle to score 100
 percent on them through the truncated path with every number grounded.
 
+
+## Part 7: the agent
+
+Phase 2 puts a model behind the Phase 1 tools: `rxdelta ask` answers a plain
+English question, and `rxdelta eval run --runner agent` scores the same agent
+against the eval set. Each entry gives the decision, the evidence behind it and
+what would change it.
+
+### Sources
+
+Read on 2026-11-18, before any API code was written:
+
+- Pricing, https://platform.claude.com/docs/en/about-claude/pricing: Claude Haiku
+  5.5 at $0.10 input, $0.125 cache write (5 minute), $0.01 cache read and $0.50
+  output per million tokens for prompts up to 100,000 tokens; Claude Sonnet 5.5
+  at $2.00, $2.50, $0.10 and $10.00. These are in `[agent.models.*]` with the URL
+  and date.
+- Models overview, https://platform.claude.com/docs/en/about-claude/models/overview:
+  current IDs `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`,
+  `claude-fable-5-2`; default effort `medium` on Haiku 5.5 and `high` on Sonnet
+  5.5; adaptive thinking on both.
+- Tool use overview, https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview:
+  parallel tool calls in one assistant message, all results returned in one user
+  message, failed calls returned with `is_error`.
+- Prompt caching, https://platform.claude.com/docs/en/build-with-claude/prompt-caching:
+  render order tools, then system, then messages; at most four breakpoints;
+  minimum cacheable prefix 512 tokens on both models; a 5 minute write costs
+  1.25 times base input.
+- The installed SDK is `anthropic` 2.10.0. Its `messages.create` takes
+  `output_config`, a top level `cache_control` and the model IDs above, which
+  was checked against the installed package rather than memory.
+
+### Models
+
+**Cheapest: `claude-haiku-5-5`. Mid tier: `claude-sonnet-5-5`.** Haiku 5.5 is the
+cheapest current model by a factor of 20 on input; Sonnet 5.5 sits between it
+and Opus 5.5. Would change: a newer Haiku or Sonnet.
+
+**Effort is pinned to `medium` for both.** The two models default to different
+efforts (Haiku `medium`, Sonnet `high`), so leaving the default would mix a model
+change with an effort change in experiment 2. `medium` is also what the docs
+suggest for multistep tool use on Sonnet 5.5. It is one config key,
+`[agent].effort`. Would change: a measured accuracy gain at `high` worth its
+cost.
+
+**Thinking is left on, at the model default, and thinking blocks go back
+unchanged.** Neither model allows turning thinking off with `disabled`. The
+client keeps every content block as a plain dict and sends it back as it came,
+which is what the API needs to keep using earlier thinking.
+
+**No forced `tool_choice`.** Sonnet 5.5 rejects `tool_choice` `any` and `tool`
+with a 400. The loop uses the default `auto`, the system prompt says to finish
+with `submit_answer`, and a plain text stop gets one reminder.
+
+### Client
+
+**Two cache breakpoints plus automatic caching.** One on the system block and
+one on the last tool definition, so the identical 6,572 token prefix (system
+prompt and eight tools, counted with the free `count_tokens` endpoint on both
+models) is written once and read on every later turn and question; the top
+level `cache_control` caches the growing message tail within a question.
+
+**`input_tokens` in `RunnerOutput` counts every prompt token.** The API reports
+uncached input, cache writes and cache reads separately. The output's
+`input_tokens` is their sum, so token counts are comparable whether or not the
+cache hit; the split is in the trace and the summary's cache hit share.
+
+**The cassette key is a hash of the whole request.** Model, system prompt,
+messages, tools, `max_tokens` and effort. Any change to the prompt, a tool
+description or a config value that reaches the request makes replay fail and
+name the missing hash, which is the point: a cassette is only evidence for the
+exact request it recorded. Keys matching `sk-ant-` are scrubbed before writing.
+
+**Haiku's long prompt price is not modelled.** Above 100,000 prompt tokens Haiku
+5.5 costs five times as much. The per question cost cap ends a run long before a
+prompt gets there. Would change: raising the turn or cost limits a lot.
+
+### The loop
+
+**`submit_answer` gets its own schema flattening.** The Phase 1 `_inline` turns
+every `anyOf [X, null]` into `X`, which is right for optional tool filters but
+wrong for `ChangeItem.before` and `after`, which are required and can be null
+(a drug added has no before). The answer schema keeps those nullable, drops the
+discriminator mapping (it holds `$ref`s), writes `oneOf` as `anyOf`, spells each
+`kind` constant as a one value enum, and makes `kind` required in every branch.
+The `ChangeType` docstring was dropped from the schema too: it mentions
+`member_impact`, which the model never sees.
+
+**Guards run schema, then grounding, then consistency, each with its own
+retries.** A failed guard returns an error tool result naming the problem. When
+its retries run out the answer is accepted and the guard is listed in
+`guards_failed`. The schema guard is the exception: with no valid answer there
+is nothing to accept, so the run ends with `error`. A guard turned off still
+records what it would have found, which is how the ablation measures the
+first draft rate with the guards off.
+
+**Every draft is kept, with the number of tool calls made before it.** The
+summary grades the first draft's grounding itself, against only the results the
+model had seen when it wrote it, rather than trusting what the loop recorded.
+
+**Consistency rules are few and cheap.** Empty text; text where the answer talks
+about its own nature; a count whose number is not in the text; a list marked
+truncated with no total, or a text that does not state the total or say the
+list is partial; a clarifying question that does not name every product. Each
+is a rule a person would apply on reading the answer, not a check against gold.
+
+**A shortened tool result keeps `total` and halves its longest list.** Past
+`[agent].max_tool_result_chars` (24,000 characters of JSON, about 7,000 tokens)
+the longest list anywhere in `data` is halved until the JSON fits, `truncated`
+is set and the note says what was cut and how to narrow the query. The full
+result stays in the `ToolCallRecord`.
+
+**`RunnerOutput` gained an optional `trace`, left out of `model_dump`.** The
+scorer and `ask --json` never see it; the harness writes it under `trace` in
+each results line. Phase 1 runners leave it empty.
+
+**The trace stores the final message history, not a copy of every request.**
+Each request resends the whole history, so storing every request would grow as
+the square of the turns. The final history plus per turn stop reasons and usage
+holds every request and response.
+
+### Running evals
+
+**`--stratified` instead of changing `--limit`.** `--limit` takes the first N
+items, which Phase 1 tests rely on. `--stratified` takes them one category at a
+time, so `--limit 40 --stratified` covers every category.
+
+**Repeats are pooled; compare votes.** With `--repeats 3` every summary number
+is over all 3 times N answers (pooled accuracy equals the mean of the repeat
+accuracies), and a `repeats` block adds each repeat's accuracy, min, max, sample
+standard deviation and the right on every, some or no repeat counts. `eval
+compare` calls an item right when it was right on most of its repeats.
+
+**The budget counts real spend, and stops new answers, not answers in flight.**
+The estimate before a run is answers times the mean cost per answer of the
+latest ledger entry for that model, or `estimate_usd_per_question` from config
+when there is none. During a run a shared counter stops new answers once spend
+reaches the budget left; answers already running finish, so a run can pass the
+cap by at most `--workers` answers. Paraphrase drafting is logged with kind
+`paraphrase` and does not count toward the per answer mean.
+
+**Results are appended as answers finish and rewritten in order at the end.** A
+stopped or crashed run keeps every finished answer, and `--resume <dir>` skips
+them. `run.json` records the selection and settings; a resume with different
+flags is refused rather than mixing two configurations in one folder.
+
+**`ask` uses `rxdelta-cms.db` when it exists.** Otherwise the default database.
+The months it reports are those of the last tool call that named months.
+
+### Housekeeping
+
+**Commit messages carry no attribution trailer.** The owner's standing
+instructions forbid AI references in commit messages, which overrides the
+default co-author line.
+
+**The prompt file stays out of git like the Phase 1 one.** `docs/phase2-prompt.md`
+is listed in `.git/info/exclude`.
+
+**The banned words grep became a test.** `tests/test_prose.py` (also `make
+prose-check`) fails on any em or en dash in a tracked text file and on text
+where code or the agent talks about being an AI or about who wrote it. Words
+that describe what the code does (`agent`, `model`, `anthropic`) are allowed. Three files
+that detect dashes and three that name the self talk phrases are allowed to
+contain them.
+
+**The fixture manifest was rebuilt; only its config hash changed.** The manifest
+records a hash of the whole config file, and the new `[agent]` sections changed
+it. The fixture set itself is byte for byte the same, as CI's `cmp` checks.
+
+**Two Phase 1 tests changed.** The runner registry test now expects `agent`
+beside `oracle` and `null`, and the run outputs test expects `run.json`.
+
+**Dependencies: `anthropic` and `python-dotenv` only.**
+
+### Budget and limits
+
+**Budget $50, per question cap $0.50.** Set by the owner at the first stop,
+after an estimate of about $65 for the full plan if Sonnet won. The measured
+costs came in well under the estimate ($0.0023 per Haiku answer against
+$0.006 assumed, $0.026 per Sonnet answer against $0.05), so Sonnet was run with
+1 repeat, Haiku with 3, and the whole phase cost $17.15.
+
+**The smoke test changed two limits before any full run.** A 40 question
+stratified Haiku run on real dev (`runs/20261118T200224Z_agent_dev`, 77.5
+percent, $0.13) showed two harness problems, fixed before runs 1 and 2:
+
+- 24 tool calls was too few for the task. The oracle needs up to 95 calls on
+  real dev (one `get_coverage` per drug), so some questions were unanswerable
+  by design. The limits became 100 tool calls and 40 turns; the cost cap still
+  bounds spend.
+- `submit_answer` did not say what the coverage fields mean, and Haiku put 0 in
+  `quantity_limit_amount` and `days` where the tool returns null (2 of 9
+  failures). The description now says to leave them out when there is no
+  quantity limit, and the consistency guard checks it.
+
+**The API account ran out of credit mid run.** After $4.45, every request
+failed with "credit balance is too low": 291 of run 1's 465 answers and 4 of run
+2's. Two changes followed. An account level error (no credit, a bad key, no
+access) now stops a run at once instead of failing every remaining question,
+and `--resume` asks again for every answer that ended in an API or account
+error, since those say nothing about the agent. After credit was added, both
+runs were finished in place with `--resume`; no answer was paid for twice.
+
+**`max_tokens` went from 8,192 to 32,000 after the first v2 dev run, with
+streaming.** v2 tells the model to give every row, and for a drug that left 328
+formularies the `change` answer is about 15,000 tokens of JSON. At 8,192 the
+response was cut off, the truncated `submit_answer` failed the schema, and 13 of
+465 Haiku answers ended in errors (`runs/20261118T205442Z_agent_dev`, 93.5
+percent). The client now streams (the SDK refuses large non streaming
+requests), a call cut off at the limit is sent back with a plain "you were cut
+off, send it again" instead of a schema error, and both v2 dev runs were done
+again. The first v2 runs stay in `runs/` and in the ledger. This was a dev
+change, made before the test split was run.
+
+**`rxdelta ask` does not write to the spend ledger.** The ledger is for scored
+runs and paraphrase drafts. The three README examples cost $0.0021.
+
+### Experiments
+
+All on the real set, dev split (155 questions) unless noted. Folders are under
+`runs/`, which is git ignored; the numbers are copied here and in the README.
+
+| # | run | folder | accuracy | cost |
+|---|---|---|---|---|
+| | smoke: Haiku, v1, 40 stratified | `20261118T200224Z_agent_dev` | 77.5% | $0.13 |
+| 1 | Haiku, v1, guards on, 3 repeats | `20261118T200744Z_agent_dev-2` | 82.6% (81.9 to 83.2) | $1.05 |
+| 2 | Sonnet, v1, guards on, 1 repeat | `20261118T200744Z_agent_dev` | 76.8% | $4.09 |
+| 3 | Haiku, v1, guards off, 1 repeat | `20261118T205257Z_agent_dev` | 81.3% | $0.31 |
+| 5 | Haiku, v2, 3 repeats, 8,192 tokens | `20261118T205442Z_agent_dev` | 93.5% (92.9 to 94.2) | $1.12 |
+| 5 | Sonnet, v2, 1 repeat, 8,192 tokens | `20261118T205446Z_agent_dev` | 94.2% | $4.53 |
+| 5 | Haiku, v2, 3 repeats, 32,000 tokens | `20261118T213117Z_agent_dev-2` | 96.1% (96.1 to 96.1) | $1.10 |
+| 5 | Sonnet, v2, 1 repeat, 32,000 tokens | `20261118T213117Z_agent_dev` | 94.2% | $4.34 |
+| 6 | **Haiku, v2, guards on, test split, 3 repeats** | `20261118T215940Z_agent_test` | **96.9% (96.9 to 96.9)** | $0.43 |
+
+Two cassette recordings of 10 fixture questions cost $0.014, the 40 paraphrase
+drafts $0.0012.
+
+**Haiku 5.5 is the better model on this set.** It beat Sonnet 5.5 under v1 (82.6
+against 76.8 percent) and matched it under v2 (96.1 against 94.2 percent, inside
+one Sonnet repeat's noise) at about a twelfth of the cost per correct answer.
+Sonnet's v1 misses were the same habits as Haiku's, applied more consistently:
+it gave the wrong answer kind on 16 items against Haiku's 10, mostly `change` for "which drugs".
+Would change: a question mix with more open ended reasoning, where a stronger
+model might pull ahead.
+
+**v2 was also run on Sonnet.** The plan called for v2 on the better model only.
+With Haiku the better model, that run and "v2 on Haiku" are the same, so v2 was
+also run on Sonnet (1 repeat, about $4.50 each time) to answer the question the
+extra run was asked for: whether the prompt closes the gap between models. It
+does; under v2 the two are within a point or two.
+
+> Superseded in part. The grounding rates below were measured with a number
+> check that read numbered list markers as numbers. Rescored, the final
+> ungrounded rate with the guards off is 1.9 percent, first drafts with the
+> guards on are 3.4 to 4.5 percent on dev and 0.5 percent on test, and many of
+> the "fixed" retries were false alarms. See
+> [Numbered list markers](#numbered-list-markers-were-read-as-numbers).
+
+**What the guards are worth.** With all three off (run 3), accuracy was 81.3
+percent, inside run 1's spread, so the guards do not buy accuracy. They buy
+clean answers: 3.2 percent of final answers stated a number no tool returned
+and 2 ended with a schema error. With them on, 5 to 8 percent of first drafts
+had an ungrounded number, every one was retried, and every retry fixed it (23
+of 23 in run 1, 15 of 15 on test).
+
+**The final configuration is Haiku 5.5, v2, guards on, 32,000 tokens.** It is now
+the config default (`prompt_version = "v2"`). The test split was run once, with
+it, after all dev work. Two things seen afterwards were not acted on: v2's
+clarify rule asks about a product the question already names
+(`rxd-v1-0044`, all three test repeats), and the grounding check reads
+numbered list markers ("1.", "2.") as claimed numbers, which made the guard
+send back one correct draft (the retry dropped the numbering and passed).
+Both are for a v3 and a grounding fix, judged on dev.
+
+**Repeats agree more than expected.** The final runs scored the same accuracy
+on all three repeats (96.1, 96.1, 96.1 on dev; 96.9 on test), yet 2 dev and 3
+test questions were right on only some repeats: the misses moved between
+questions without changing the total. One repeat is not enough to know which
+questions are stable.
+
+### Error analysis and gold
+
+`docs/error-analysis-v1.md` sorts every failure of runs 1 and 2 into one
+category. The three largest, by items across both runs: misread `truncated`
+(15 and 13), wrong answer kind (10 and 16), ambiguity handled wrong (6 and 6).
+
+**No gold errors were found**, so the second stop did not apply. Items that
+looked suspicious were checked against what the tools return for the question
+as worded: "did X change" items whose answer is every one of 300 removal rows,
+and "Eliquis 5 mg" covering both the tablet and the starter pack, which the
+name matcher returns for that name. One scoring quirk is recorded instead of a
+gold error: the generic product of `rxd-v1-0171` is labelled "metformin /
+metformin / sitagliptin / sitagliptin", so naming every product in the text
+needs that exact string. Asking (`clarify`) is unaffected.
+
+**Questions with many tool calls.** Two dev questions needed more than 24 calls
+in every run (29 to 33, nearly all `get_coverage`), all answered right, at 2.4
+(Haiku) to 3.5 (Sonnet) times the mean cost. A batch coverage tool would cut
+them to about 4 calls; it is in `docs/phase3-ideas.md`. The tools were not
+changed during the runs.
+
+### Paraphrases
+
+`rxdelta evalset paraphrase-draft` wrote one casual paraphrase for each of 40
+dev items, four or so per category, with Haiku 5.5 at low effort, to
+`evals/paraphrase_candidates.csv` with an empty `approved` column. Several
+drafts are unchanged copies of the original and at least one changes the
+meaning ("formulary 00026338" became "plan 00026338"); `rxdelta evalset
+paraphrase --approved` refuses an unchanged or repeated paraphrase, and the
+rest is for the owner's review. Approved rows become
+`evals/rxdelta_v1_para.jsonl` with the original gold answers and a manifest
+that carries the source set's database row counts, so `eval run` checks the
+database the same way.
+
+### The real eval manifest
+
+**Rebuilt for the config hash only.** Like the fixture manifest, the real set's
+manifest records a hash of the whole config file. `make evalset` was run again
+at the end of the phase; `evals/rxdelta_v1.jsonl` came out byte for byte the
+same and only `config_sha256` changed in the manifest.
+
+### What I would do differently
+
+- Measure one real question per model before estimating cost. The estimate was
+  two to three times too high because it assumed more output per turn than the
+  models write at medium effort.
+- Check the account's credit before a run that size, and make account errors
+  fatal from the start rather than after a run lost 291 answers to one.
+- Write the answer kind rules into the `submit_answer` description in the
+  first version. The largest single class of v1 failures was right facts in
+  the wrong shape, which says the interface, not the model, was unclear.
+- Size `max_tokens` from the largest answer the eval expects (a few hundred
+  change rows) instead of from a typical one.
+
+### Repeats that agree
+
+**The repeats are independent; only their totals matched.** The final dev run
+scored 96.1 percent on each of its three repeats and the test run 96.9 percent
+on each, which could mean the repeats reused one answer. They did not:
+
+| run | right on every repeat | some | none |
+|---|---|---|---|
+| dev, Haiku, v2 (`20261118T213117Z_agent_dev-2`) | 148 | 2 (`0035`, `h10`) | 5 |
+| test, Haiku, v2 (`20261118T215940Z_agent_test`) | 61 | 3 (`0048`, `0149`, `0176`) | 1 |
+
+On dev, `0035` failed only on repeat 3 and `h10` passed only on repeat 3, so
+each repeat missed exactly 6; on test each missed exactly 2. Every answer was
+its own API call: neither run used `--replay`, and prompt caching reuses only
+the input prefix, never a response. The answers differ too: for 142 of 155 dev
+items (60 of 65 on test) the three final texts are all different, nearly every
+item has three different output token counts, and 98 dev items took a
+different sequence of tool calls on at least one repeat. No temperature is
+sent, so the API default (1.0) applies; Claude Haiku 5.5 rejects any other
+sampling setting.
+
+### Numbered list markers were read as numbers
+
+**What was wrong.** `grounding.check` took every number in `final_text` as a
+claim, including the "1." and "2." that open the lines of a numbered list. A
+list marker is in no tool result, so a correct answer written as a list was
+"ungrounded". The scorer and the runtime guard share the function, so both
+were affected: the guard sent correct drafts back, and the summaries counted
+them as made up numbers.
+
+**The fix.** A number of up to three digits followed by `.` or `)` and a space,
+at the start of a line, is dropped before numbers are read. "Step 1." in the
+middle of a sentence is still a claim. Tests cover both, and a loop test checks
+that a clarifying question written as a numbered list passes the guard first
+time.
+
+**Rescored, with no API calls.** `rxdelta eval rescore <run dirs>` scores a saved
+run's answers again with the current scorer and writes `summary.rescored.json`
+beside the untouched `summary.json`, so the numbers first reported stay on
+record. All 13 saved runs were rescored. Accuracy did not change in any of them;
+grounding is not part of correctness. Five runs changed:
+
+| run | metric | before | after |
+|---|---|---|---|
+| run 1, Haiku, v1 | first draft ungrounded | 4.95% | 3.66% |
+| run 3, Haiku, v1, guards off | items with ungrounded numbers | 5 | 3 |
+| run 3 | ungrounded numbers in total | 15 | 3 |
+| run 3 | first draft and final ungrounded | 3.23% | 1.94% |
+| Haiku, v2, 8,192 tokens | first draft ungrounded | 8.39% | 4.73% |
+| Haiku, v2, 32,000 tokens | first draft ungrounded | 7.74% | 3.44% |
+| test, Haiku, v2 | first draft ungrounded | 7.69% | 0.51% |
+
+The Sonnet runs did not change: Sonnet rarely numbers its lists. Counting every
+draft the guard flagged, not only first drafts, the false alarms were 6 of 23 in
+run 1, 17 of 40 and 20 of 38 in the two Haiku v2 dev runs, and 14 of 15 on test.
+So the earlier claim that the grounding guard caught made up numbers in 5 to 8
+percent of first drafts overstated it: on test, nearly every retry was a list
+marker. The guard still matters on dev (3 to 5 percent of first drafts, every
+one fixed) and with the guards off 1.9 percent of final answers carried a made
+up number. The README and the error analysis now quote the rescored rates.
+
+**The runs were not repeated with the fixed guard.** A false alarm cost the
+model one retry, which it passed by rewriting the list; it did not change any
+answer's correctness, so the accuracy numbers stand. The cassette replay test
+still matches exactly: none of its ten recorded drafts used a numbered list.
+
+### Paraphrase run
+
+Not done yet. `evals/paraphrase_candidates.csv` in the repo has no approved rows,
+so there is nothing to build the paraphrase set from.

@@ -157,6 +157,9 @@ class RunnerOutput(BaseModel):
     cost_usd: float = 0.0
     latency_ms: int
     error: str | None = None
+    # A runner's own record of how it got the answer. Never scored, and left out
+    # of model_dump so it is only written where asked for.
+    trace: dict[str, Any] | None = Field(default=None, exclude=True)
 
 
 class QuestionContext(BaseModel):

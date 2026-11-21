@@ -281,6 +281,58 @@ class EvalConfig(_Section):
     worst_items: int = Field(ge=1)
 
 
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
+
+
+class ModelPrices(_Section):
+    input_per_mtok: float = Field(ge=0)
+    output_per_mtok: float = Field(ge=0)
+    cache_write_per_mtok: float = Field(ge=0)
+    cache_read_per_mtok: float = Field(ge=0)
+    estimate_usd_per_question: float = Field(gt=0)
+
+
+class GuardsConfig(_Section):
+    schema_: bool = Field(alias="schema")
+    schema_retries: int = Field(ge=0)
+    grounding: bool
+    grounding_retries: int = Field(ge=0)
+    consistency: bool
+    consistency_retries: int = Field(ge=0)
+
+
+class AgentConfig(_Section):
+    default_model: str
+    prompt_version: str = Field(pattern=r"^v\d+$")
+    max_tokens: int = Field(ge=256)
+    effort: Effort
+    max_turns: int = Field(ge=1)
+    max_tool_calls: int = Field(ge=1)
+    max_cost_per_question_usd: float = Field(gt=0)
+    max_tool_result_chars: int = Field(ge=1000)
+    plain_text_reminders: int = Field(ge=0)
+    request_timeout_seconds: float = Field(gt=0)
+    max_retries: int = Field(ge=0)
+    budget_usd: float = Field(ge=0)
+    ledger_path: str
+    guards: GuardsConfig
+    models: dict[str, ModelPrices]
+
+    @model_validator(mode="after")
+    def _default_priced(self) -> AgentConfig:
+        if self.default_model not in self.models:
+            raise ValueError(f"default_model {self.default_model!r} has no [agent.models] entry")
+        return self
+
+    def prices(self, model: str) -> ModelPrices:
+        if model not in self.models:
+            known = ", ".join(sorted(self.models))
+            raise ConfigError(
+                f"No prices for model {model!r} in [agent.models]. Priced models: {known}."
+            )
+        return self.models[model]
+
+
 @dataclass(frozen=True)
 class Config:
     path: Path
@@ -297,6 +349,7 @@ class Config:
     evalset: EvalsetConfig
     eval: EvalConfig
     download: DownloadConfig
+    agent: AgentConfig
 
     @property
     def sha256(self) -> str:
@@ -634,6 +687,7 @@ def load_config(path: Path | None = None) -> Config:
         evalset=_parse_model(data, EvalsetConfig, "evalset"),
         eval=_parse_model(data, EvalConfig, "eval"),
         download=_parse_model(data, DownloadConfig, "source", "download"),
+        agent=_parse_model(data, AgentConfig, "agent"),
     )
 
 

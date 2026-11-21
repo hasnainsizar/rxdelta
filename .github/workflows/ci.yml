@@ -58,3 +58,8 @@ jobs:
         run: |
           uv run rxdelta eval run --set evals/rxdelta_fixture_v1.jsonl --runner oracle --split all \
             --db evals.db --min-accuracy 1.0 --max-missed-refusal-rate 0
+
+      # Runs the real agent loop on recorded model responses. Needs no key; it
+      # skips with a message until the cassette is recorded with make ask-record.
+      - name: Agent replay
+        run: uv run pytest tests/test_agent_replay.py -rs

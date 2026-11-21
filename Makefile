@@ -14,7 +14,7 @@ else
 OPEN := xdg-open
 endif
 
-.PHONY: help install sample load diff summary report demo test lint typecheck check coverage bench example names distribution cms-fetch cms-load cms-example cms-distribution cms-bench clean ask-fixtures evaldb evalset-fixture eval-fixture-oracle evalset eval-oracle eval-null
+.PHONY: help install sample load diff summary report demo test lint typecheck check coverage bench example names distribution cms-fetch cms-load cms-example cms-distribution cms-bench clean ask-fixtures evaldb evalset-fixture eval-fixture-oracle evalset eval-oracle eval-null ask-record eval-agent-dev eval-agent-test prose-check
 
 help:
 	@echo "make demo       generate sample data, load both months, diff, open the report"
@@ -33,6 +33,10 @@ help:
 	@echo "make evalset    rebuild evals/rxdelta_v1.jsonl from the real CMS database"
 	@echo "make eval-oracle score the oracle runner on the real set's dev split"
 	@echo "make evalset-fixture rebuild the fixture eval set used by tests and CI"
+	@echo "make ask-record record the agent replay cassette (needs ANTHROPIC_API_KEY)"
+	@echo "make eval-agent-dev  score the agent on the real dev split (paid)"
+	@echo "make eval-agent-test score the agent on the real test split (paid)"
+	@echo "make prose-check check the repo for dashes and AI self talk"
 	@echo "make clean      remove the database, generated data and report"
 
 install:
@@ -165,3 +169,35 @@ eval-oracle:
 
 eval-null:
 	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner null --split dev --db $(CMS_DB)
+
+# The agent. Every target below except ask-record's replay check calls a paid
+# model and needs ANTHROPIC_API_KEY. Spend is logged to runs/spend.jsonl and
+# capped by [agent].budget_usd.
+MODEL   ?= claude-haiku-5-5
+PROMPT  ?= v1
+REPEATS ?= 3
+CASSETTE ?= tests/cassettes/agent_fixture.jsonl
+
+# Records the replay cassette: one fixture question per category. CI replays it
+# with no key. The cassette path is written out, not a variable, for the same
+# reason as clean.
+ask-record: evaldb
+	rm -f tests/cassettes/agent_fixture.jsonl tests/cassettes/agent_fixture.scores.json
+	$(RUN) rxdelta eval run --set $(FIXTURE_SET) --db evals.db --split all --limit 10 \
+		--stratified --runner agent --model $(MODEL) --prompt $(PROMPT) --workers 1 \
+		--record tests/cassettes/agent_fixture.jsonl --min-accuracy 0 \
+		--max-missed-refusal-rate 1
+
+eval-agent-dev:
+	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner agent --split dev --db $(CMS_DB) \
+		--model $(MODEL) --prompt $(PROMPT) --repeats $(REPEATS)
+
+eval-agent-test:
+	$(RUN) rxdelta eval run --set $(EVAL_SET) --runner agent --split test --db $(CMS_DB) \
+		--model $(MODEL) --prompt $(PROMPT) --repeats $(REPEATS)
+
+# No em or en dashes, and no text where the agent or the code talks about being
+# an AI or about how it was written. Words that describe what the code does
+# (agent, model, anthropic, system_prompt, tool_use) are fine.
+prose-check:
+	$(RUN) pytest -q tests/test_prose.py

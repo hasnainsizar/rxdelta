@@ -326,3 +326,81 @@ max_missed_refusal_rate = 0.05
 workers = 4
 # Items listed in the report's worst items section.
 worst_items = 20
+
+# ---------------------------------------------------------------------------
+# Question answering, phase 2: the agent behind `rxdelta ask` and
+# `rxdelta eval run --runner agent`. The API key never lives here; it comes from
+# the ANTHROPIC_API_KEY environment variable or a git-ignored .env file.
+# ---------------------------------------------------------------------------
+
+[agent]
+# Model used when --model is not given. Must have an [agent.models] entry.
+default_model = "claude-haiku-5-5"
+# System prompt file rxdelta/agent/prompts/system_<version>.md used by default.
+prompt_version = "v2"
+# Most output tokens one model response may use, thinking included. A change
+# answer for a drug removed from 328 formularies runs to about 15,000 tokens.
+max_tokens = 32000
+# Thinking effort sent with every request: low, medium, high, xhigh or max.
+effort = "medium"
+# Model responses allowed per question before the run ends with an error.
+max_turns = 40
+# Tool calls allowed per question, submit_answer excluded.
+max_tool_calls = 100
+# Spend allowed per question, in US dollars, before the run ends with an error.
+max_cost_per_question_usd = 0.50
+# A tool result the model reads is shortened past this many characters of JSON.
+max_tool_result_chars = 24000
+# Reminders sent when the model stops with plain text instead of submit_answer.
+plain_text_reminders = 1
+# Seconds before one API request is abandoned; the SDK retries it.
+request_timeout_seconds = 120.0
+# Retries the SDK makes after a 429, a 5xx or a connection error.
+max_retries = 4
+# Total spend, in US dollars, that scored runs may reach across the ledger.
+budget_usd = 50.0
+# One line per scored run: date, run folder, model, items, cost.
+ledger_path = "runs/spend.jsonl"
+
+# Each guard checks a submitted answer before it is accepted. A failed check goes
+# back to the model with the reason, while that guard's retries last.
+[agent.guards]
+# The answer must validate against the answer schema.
+schema = true
+# Retries after a schema failure.
+schema_retries = 1
+# Every number in final_text must appear in a tool result of the same run.
+grounding = true
+# Retries after a grounding failure.
+grounding_retries = 1
+# The structured answer and the text must agree (counts, partial lists, products).
+consistency = true
+# Retries after a consistency failure.
+consistency_retries = 1
+
+# Prices in US dollars per million tokens, from
+# https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-18).
+# Cache writes use the 5 minute rate, which is the only TTL the client asks for.
+[agent.models."claude-haiku-5-5"]
+# Base input tokens (prompts up to 100,000 tokens; no question comes near that).
+input_per_mtok = 0.10
+# Output tokens, thinking included.
+output_per_mtok = 0.50
+# Tokens written to the prompt cache.
+cache_write_per_mtok = 0.125
+# Tokens read from the prompt cache.
+cache_read_per_mtok = 0.01
+# Cost per question assumed before any run of this model is in the ledger.
+estimate_usd_per_question = 0.01
+
+[agent.models."claude-sonnet-5-5"]
+# Base input tokens.
+input_per_mtok = 2.00
+# Output tokens, thinking included.
+output_per_mtok = 10.00
+# Tokens written to the prompt cache.
+cache_write_per_mtok = 2.50
+# Tokens read from the prompt cache.
+cache_read_per_mtok = 0.10
+# Cost per question assumed before any run of this model is in the ledger.
+estimate_usd_per_question = 0.15

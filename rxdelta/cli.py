@@ -14,9 +14,18 @@ from typing import Annotated, Any, TypeVar
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from rxdelta import __version__
+from rxdelta.agent import ask as ask_support
+from rxdelta.agent import trace as agent_trace
+from rxdelta.agent.budget import Ledger
+from rxdelta.agent.budget import check as check_budget
+from rxdelta.agent.budget import estimate as estimate_spend
+from rxdelta.agent.client import ModelClient, ReplayClient, cost_usd
+from rxdelta.agent.loop import AgentRunner, AgentSettings, default_client
+from rxdelta.ask.answer import QuestionContext
 from rxdelta.config import CATEGORIES, Config, get_config
 from rxdelta.db import DEFAULT_DB_PATH, connect, queries
 from rxdelta.diff import impact
@@ -25,6 +34,7 @@ from rxdelta.diff.engine import DiffResult, diff_snapshots
 from rxdelta.diff.impact import ChangeGroup
 from rxdelta.evals import builder as evalset_builder
 from rxdelta.evals import harness as eval_harness
+from rxdelta.evals import paraphrase
 from rxdelta.ingest import download as cms_download
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
@@ -944,6 +954,63 @@ def evalset_build(
         )
 
 
+@evalset_app.command("paraphrase-draft")
+@handle_errors
+def evalset_paraphrase_draft(
+    set_path: Annotated[Path, typer.Option("--set", help="Eval set to paraphrase.")] = Path(
+        "evals/rxdelta_v1.jsonl"
+    ),
+    n: Annotated[int, typer.Option("--n", min=1, help="Dev items, spread over categories.")] = 40,
+    model: Annotated[str | None, typer.Option("--model", help="Model ID.")] = None,
+    out: Annotated[Path, typer.Option("--out", help="Candidate CSV.")] = Path(
+        "evals/paraphrase_candidates.csv"
+    ),
+    config_path: ConfigOption = None,
+) -> None:
+    """Draft one casual paraphrase per item with a model, for a person to approve."""
+    config = get_config(config_path)
+    chosen = model or config.agent.default_model
+    prices = config.agent.prices(chosen)
+    ledger = Ledger(config.resolve(config.agent.ledger_path))
+    estimated = estimate_spend(config.agent, ledger, chosen, 0)
+    if estimated.spent >= config.agent.budget_usd:
+        raise RxdeltaError("The ledger is already at [agent].budget_usd.")
+    drafted = paraphrase.draft(
+        set_path, n, make_agent_client(config), chosen, max_tokens=1024, effort="low"
+    )
+    paraphrase.write_csv(out, drafted.rows)
+    cost = cost_usd(drafted.usage, prices)
+    ledger.append(
+        run_dir=out,
+        model=chosen,
+        items=len(drafted.rows),
+        answers=len(drafted.rows),
+        cost=cost,
+        kind="paraphrase",
+    )
+    console.print(
+        f"Wrote {len(drafted.rows)} candidates to {out} for ${cost:.4f}. Mark the approved "
+        "column 'yes' on each row to keep, then run rxdelta evalset paraphrase --approved.",
+        highlight=False,
+    )
+
+
+@evalset_app.command("paraphrase")
+@handle_errors
+def evalset_paraphrase(
+    approved: Annotated[Path, typer.Option("--approved", help="Reviewed candidate CSV.")],
+    set_path: Annotated[Path, typer.Option("--set", help="Eval set the rows come from.")] = Path(
+        "evals/rxdelta_v1.jsonl"
+    ),
+    out: Annotated[Path, typer.Option("--out", help="Paraphrase eval set.")] = Path(
+        "evals/rxdelta_v1_para.jsonl"
+    ),
+) -> None:
+    """Build an eval set from approved paraphrases, keeping the original gold answers."""
+    items = paraphrase.build(set_path, approved, out)
+    console.print(f"Wrote {len(items)} items to {out} with a manifest.", highlight=False)
+
+
 eval_app = typer.Typer(no_args_is_help=True, help="Score a runner against the eval set.")
 app.add_typer(eval_app, name="eval")
 
@@ -978,25 +1045,123 @@ def eval_run(
         float | None,
         typer.Option("--max-missed-refusal-rate", help="Override [eval].max_missed_refusal_rate."),
     ] = None,
+    stratified: Annotated[
+        bool, typer.Option("--stratified", help="Spread --limit evenly over categories.")
+    ] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Agent model ID.")] = None,
+    prompt: Annotated[
+        str | None, typer.Option("--prompt", help="Agent system prompt version, e.g. v1.")
+    ] = None,
+    repeats: Annotated[int, typer.Option("--repeats", min=1, help="Runs per item.")] = 1,
+    no_schema_guard: Annotated[
+        bool, typer.Option("--no-schema-guard", help="Turn off the schema guard.")
+    ] = False,
+    no_grounding_guard: Annotated[
+        bool, typer.Option("--no-grounding-guard", help="Turn off the grounding guard.")
+    ] = False,
+    no_consistency_guard: Annotated[
+        bool, typer.Option("--no-consistency-guard", help="Turn off the consistency guard.")
+    ] = False,
+    resume: Annotated[
+        Path | None, typer.Option("--resume", help="Run folder to finish; same flags as before.")
+    ] = None,
+    record: Annotated[
+        Path | None, typer.Option("--record", help="Record model responses to this cassette.")
+    ] = None,
+    replay: Annotated[
+        Path | None, typer.Option("--replay", help="Answer only from this cassette, no key.")
+    ] = None,
     config_path: ConfigOption = None,
 ) -> None:
     """Run one runner over the eval set and write results, a summary and a report."""
     if split not in ("dev", "test", "all"):
         raise RxdeltaError(f"--split must be dev, test or all, got {split!r}")
+    config = get_config(config_path)
+    guards_off = tuple(
+        name
+        for name, off in (
+            ("schema", no_schema_guard),
+            ("grounding", no_grounding_guard),
+            ("consistency", no_consistency_guard),
+        )
+        if off
+    )
+    agent_flags = model or prompt or guards_off or record or replay
+    if runner_name != "agent" and agent_flags:
+        raise RxdeltaError("--model, --prompt, guard, --record and --replay need --runner agent.")
+    if record and replay:
+        raise RxdeltaError("Use --record or --replay, not both.")
+    factory = None
+    options = eval_harness.RunOptions(repeats=repeats, resume=resume)
+    if runner_name == "agent":
+        settings = AgentSettings.from_config(
+            config, model=model, prompt_version=prompt, guards_off=guards_off
+        )
+        client: ModelClient
+        if replay is not None:
+            client = ReplayClient(replay, "replay")
+        elif record is not None:
+            client = ReplayClient(record, "record", make_agent_client(config))
+        else:
+            client = make_agent_client(config)
+        ledger = None if replay else Ledger(config.resolve(config.agent.ledger_path))
+        cap = None
+        if ledger is not None:
+            answers = eval_harness.planned_answers(
+                set_path, split, category, limit, stratified, repeats, resume
+            )
+            estimated = estimate_spend(config.agent, ledger, settings.model, answers)
+            console.print(estimated.describe(), highlight=False)
+            check_budget(estimated)
+            cap = config.agent.budget_usd - estimated.spent
+
+        def factory(items: list[Any], ctx: ToolContext) -> AgentRunner:
+            return AgentRunner(items, ctx, client=client, settings=settings)
+
+        options = eval_harness.RunOptions(
+            repeats=repeats,
+            resume=resume,
+            settings=settings.describe(),
+            ledger=ledger,
+            budget_cap=cap,
+            model=settings.model,
+        )
     outcome = eval_harness.run(
         set_path=set_path,
         runner_name=runner_name,
         split=split,
         db_path=db,
-        config=get_config(config_path),
+        config=config,
         out_root=out_dir,
         category=category,
         limit=limit,
         workers=workers,
         min_accuracy=min_accuracy,
         max_missed_refusal_rate=max_missed_refusal_rate,
+        runner_factory=factory,
+        stratified=stratified,
+        options=options,
     )
     summary = outcome.summary
+    if record is not None:
+        scores_file = record.with_suffix(".scores.json")
+        scores_file.write_text(
+            json.dumps(
+                {
+                    "settings": summary["settings"],
+                    "eval_set": str(set_path),
+                    "split": split,
+                    "limit": limit,
+                    "stratified": stratified,
+                    "correct": eval_harness.outcomes(outcome.directory),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"Recorded {record} and {scores_file}", highlight=False)
     overall = summary["overall"]
     table = Table(title=f"{runner_name} on {split}", title_justify="left")
     table.add_column("Category")
@@ -1012,6 +1177,26 @@ def eval_run(
         f"{summary['grounding']['items_with_ungrounded']}.",
         highlight=False,
     )
+    agent = summary.get("agent")
+    if agent:
+        reps = summary["repeats"]
+        console.print(
+            f"Repeats {reps['repeats']}: mean {_pct(reps['mean'])}, min {_pct(reps['min'])}, "
+            f"max {_pct(reps['max'])}, stdev {100 * reps['stdev']:.1f} points. First draft "
+            f"ungrounded {_pct(agent['first_draft_ungrounded_rate'])}, final "
+            f"{_pct(agent['final_ungrounded_rate'])}. Cost ${summary['run_cost_usd']:.4f} "
+            f"(${agent['cost_per_question']:.4f} per answer, "
+            f"${agent['cost_per_correct'] or 0:.4f} per correct answer), cache hit share "
+            f"{_pct(agent['cache_hit_share'])}.",
+            highlight=False,
+        )
+    if agent and agent["errors"]:
+        stopped = ", ".join(f"{k} {v}" for k, v in agent["stopped_by"].items() if v)
+        err_console.print(f"[yellow]Answers ended by a limit or error: {stopped}.[/yellow]")
+    if summary.get("stopped_early"):
+        err_console.print(f"[yellow]Stopped early, {summary['stopped_early']}.[/yellow]")
+    if "ledger_total_usd" in summary:
+        console.print(f"Total spend in the ledger ${summary['ledger_total_usd']:.4f}.")
     console.print(f"Wrote {outcome.directory}", highlight=False)
     if not outcome.passed:
         err_console.print(
@@ -1028,6 +1213,16 @@ def eval_compare(
 ) -> None:
     """Per category accuracy change and the items that flipped between two runs."""
     result = eval_harness.compare(run_a, run_b)
+    if result.settings_differ:
+        settings = Table(title="Settings that differ", title_justify="left")
+        settings.add_column("Setting")
+        settings.add_column("A")
+        settings.add_column("B")
+        for key, (a, b) in result.settings_differ.items():
+            settings.add_row(key, json.dumps(a), json.dumps(b))
+        console.print(settings)
+    else:
+        console.print("Both runs used the same settings.", highlight=False)
     table = Table(title="Accuracy by category", title_justify="left")
     table.add_column("Category")
     table.add_column("A", justify="right")
@@ -1044,6 +1239,121 @@ def eval_compare(
     console.print(table)
     console.print(f"Right to wrong: {', '.join(result.right_to_wrong) or 'none'}", highlight=False)
     console.print(f"Wrong to right: {', '.join(result.wrong_to_right) or 'none'}", highlight=False)
+
+
+@eval_app.command("rescore")
+@handle_errors
+def eval_rescore(
+    run_dirs: Annotated[list[Path], typer.Argument(help="Run folders.")],
+    config_path: ConfigOption = None,
+) -> None:
+    """Score saved runs again with the current scorer, offline, keeping the old summary."""
+    config = get_config(config_path)
+    keys = (
+        ("overall", "accuracy"),
+        ("grounding", "items_with_ungrounded"),
+        ("grounding", "ungrounded_total"),
+        ("agent", "first_draft_ungrounded_rate"),
+        ("agent", "final_ungrounded_rate"),
+    )
+    for run_dir in run_dirs:
+        old, new = eval_harness.rescore(run_dir, config)
+        changed = [
+            f"{a}.{b} {old.get(a, {}).get(b)} -> {new.get(a, {}).get(b)}"
+            for a, b in keys
+            if old.get(a, {}).get(b) != new.get(a, {}).get(b)
+        ]
+        console.print(
+            f"{run_dir}: " + ("; ".join(changed) if changed else "no change"), highlight=False
+        )
+
+
+@eval_app.command("show")
+@handle_errors
+def eval_show(
+    run_dir: Annotated[Path, typer.Argument(help="Run folder.")],
+    item_id: Annotated[str, typer.Argument(help="Item ID, for example rxd-v1-0042.")],
+) -> None:
+    """Print one item's run: tool calls, guard decisions, the answer and the gold."""
+    for record in agent_trace.find_records(run_dir, item_id):
+        console.print(agent_trace.render(record), highlight=False, markup=False)
+        console.print()
+
+
+def make_agent_client(config: Config) -> ModelClient:
+    """The model client ask uses. Tests replace it with a scripted one."""
+    return default_client(config)
+
+
+@app.command("ask")
+@handle_errors
+def ask_command(
+    question: Annotated[str, typer.Argument(help="The question, in plain English.")],
+    model: Annotated[str | None, typer.Option("--model", help="Model ID.")] = None,
+    from_month: Annotated[
+        str | None, typer.Option("--from", help="Earlier month, YYYY-MM.")
+    ] = None,
+    to_month: Annotated[str | None, typer.Option("--to", help="Later month, YYYY-MM.")] = None,
+    show_tools: Annotated[
+        bool, typer.Option("--show-tools", help="Print each tool call as it happens.")
+    ] = False,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the full structured output as JSON.")
+    ] = False,
+    db: Annotated[
+        Path | None,
+        typer.Option("--db", help="Database. Default: rxdelta-cms.db if present, else rxdelta.db."),
+    ] = None,
+    config_path: ConfigOption = None,
+) -> None:
+    """Answer a question about formulary changes from the loaded CMS data."""
+    config = get_config(config_path)
+    if (from_month is None) != (to_month is None):
+        raise RxdeltaError("Give both --from and --to, or neither.")
+    db_path = ask_support.choose_db(db)
+    ctx = ToolContext(db_path=db_path, config=config)
+    ask_support.check_months(ctx)
+    settings = AgentSettings.from_config(config, model=model)
+    if not as_json:
+        err_console.print(f"[dim]Using {db_path}[/dim]", highlight=False, soft_wrap=True)
+
+    def show(kind: str, payload: dict[str, Any]) -> None:
+        if kind == "tool_call":
+            args = escape(json.dumps(payload["args"], sort_keys=True))
+            summary = escape(payload["summary"])
+            err_console.print(
+                f"[cyan]{payload['name']}[/cyan] {args}\n  [dim]-> {summary}[/dim]",
+                highlight=False,
+            )
+        elif kind == "guard":
+            problems = escape("; ".join(payload["problems"]))
+            err_console.print(
+                f"[yellow]check {payload['guard']} failed[/yellow] {problems}", highlight=False
+            )
+
+    runner = AgentRunner(
+        [],
+        ctx,
+        client=make_agent_client(config),
+        settings=settings,
+        on_event=show if show_tools else None,
+    )
+    context = QuestionContext(default_from=from_month, default_to=to_month)
+    output = runner.answer(question, context)
+    if as_json:
+        console.print_json(output.model_dump_json())
+    elif output.error is None:
+        console.print(output.final_text, highlight=False, markup=False, soft_wrap=True)
+        console.print(
+            f"[dim]{ask_support.footer(output, settings.model)}[/dim]",
+            highlight=False,
+            soft_wrap=True,
+        )
+        console.print(f"[dim]{ask_support.DISCLAIMER}[/dim]", highlight=False)
+    if output.error is not None:
+        raise RxdeltaError(
+            ask_support.friendly_error(output.error, settings.max_cost_per_question_usd)
+        )
 
 
 @app.command("fetch-cms")
