@@ -219,6 +219,21 @@ def test_a_guard_turned_off_records_but_never_retries(ctx: ToolContext) -> None:
     assert "4417" in out.trace["drafts"][0]["ungrounded"]
 
 
+def test_the_grounding_guard_ignores_numbered_list_markers(ctx: ToolContext) -> None:
+    clarify = {
+        "kind": "clarify",
+        "candidates": [
+            {"product": "Ozempic", "rxcuis": ["1"]},
+            {"product": "Rybelsus", "rxcuis": ["2"]},
+        ],
+    }
+    text = "Which one do you mean?\n1. Ozempic\n2. Rybelsus"
+    runner, client = agent(ctx, [turn(submit(clarify, text))])
+    out = _ask(runner, "Did semaglutide change?")
+    assert out.error is None and len(client.requests) == 1
+    assert out.trace is not None and out.trace["drafts"][0]["ungrounded"] == []
+
+
 def test_consistency_guard_catches_a_count_missing_from_the_text(ctx: ToolContext) -> None:
     runner, client = agent(
         ctx,

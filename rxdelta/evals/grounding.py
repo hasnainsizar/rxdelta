@@ -2,7 +2,8 @@
 
 Numbers are pulled out of the final text (integers, decimals, dollar amounts,
 percentages, tier numbers, both ends of a range). Numbers that are not claims
-are dropped: ones the question itself contains, years and YYYY-MM months,
+are dropped: numbered list markers at the start of a line, ones the question
+itself contains, years and YYYY-MM months,
 identifiers like NDCs, drug strengths ("1 mg") and mix ratios ("75/25"), and
 anything inside a drug or plan name that a tool returned. Every number left
 must equal, after normalizing format and sign, a number somewhere in the run's
@@ -25,6 +26,8 @@ _TOKEN = re.compile(
 )
 _UNITS = re.compile(r"^\s*(mg|mcg|ml|g|iu|unt|units?|mg/ml)\b", re.IGNORECASE)
 _MONTH = re.compile(r"^\d{4}-\d{2}$")
+# "1." or "2)" opening a line numbers a list item; it is not a claim.
+_LIST_MARKER = re.compile(r"^(\s*)\d{1,3}[.)](?=\s)", re.MULTILINE)
 _DASH_RANGE = re.compile(r"(\d)\s*[-–—]\s*(?=[-−]?\$)")
 _NAME_KEYS = frozenset(
     {"display_name", "name", "matched_on", "product", "plan_name", "contract_name", "label"}
@@ -89,7 +92,8 @@ def _strip_names(text: str, names: Iterable[str]) -> str:
 
 def claimed_numbers(text: str, *, question: str = "", names: Iterable[str] = ()) -> list[str]:
     """Normalized numbers the text claims, excluding anything that is not a claim."""
-    cleaned = _DASH_RANGE.sub(r"\1 to ", _strip_names(text, names))
+    unlisted = _LIST_MARKER.sub(r"\1", text)
+    cleaned = _DASH_RANGE.sub(r"\1 to ", _strip_names(unlisted, names))
     asked = {
         _key(v)
         for tok, _, _ in _tokens(question)
