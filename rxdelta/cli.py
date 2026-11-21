@@ -1241,6 +1241,33 @@ def eval_compare(
     console.print(f"Wrong to right: {', '.join(result.wrong_to_right) or 'none'}", highlight=False)
 
 
+@eval_app.command("rescore")
+@handle_errors
+def eval_rescore(
+    run_dirs: Annotated[list[Path], typer.Argument(help="Run folders.")],
+    config_path: ConfigOption = None,
+) -> None:
+    """Score saved runs again with the current scorer, offline, keeping the old summary."""
+    config = get_config(config_path)
+    keys = (
+        ("overall", "accuracy"),
+        ("grounding", "items_with_ungrounded"),
+        ("grounding", "ungrounded_total"),
+        ("agent", "first_draft_ungrounded_rate"),
+        ("agent", "final_ungrounded_rate"),
+    )
+    for run_dir in run_dirs:
+        old, new = eval_harness.rescore(run_dir, config)
+        changed = [
+            f"{a}.{b} {old.get(a, {}).get(b)} -> {new.get(a, {}).get(b)}"
+            for a, b in keys
+            if old.get(a, {}).get(b) != new.get(a, {}).get(b)
+        ]
+        console.print(
+            f"{run_dir}: " + ("; ".join(changed) if changed else "no change"), highlight=False
+        )
+
+
 @eval_app.command("show")
 @handle_errors
 def eval_show(

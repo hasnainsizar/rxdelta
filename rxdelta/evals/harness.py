@@ -332,6 +332,56 @@ def _stop_note(stopped: bool, account: list[str], kept: int, wanted: int) -> str
     return f"budget reached: {kept} of {wanted} answers finished"
 
 
+def scored_metrics(
+    items: list[EvalItem],
+    repeats: list[int],
+    outputs: list[RunnerOutput],
+    scores: list[ItemScore],
+    config: Config,
+    gates: dict[str, float],
+) -> dict[str, Any]:
+    """Every summary number that follows from the answers and their scores."""
+    metrics: dict[str, Any] = {
+        "repeats": repeat_summary([i.id for i in items], repeats, scores),
+        "run_cost_usd": round(sum(o.cost_usd for o in outputs), 6),
+        **summarize(items, scores, config, gates),
+    }
+    agent = agent_summary([i.question for i in items], outputs, scores)
+    if agent is not None:
+        metrics["agent"] = agent
+    return metrics
+
+
+def rescore(directory: Path, config: Config) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Score a saved run's answers again with the current scorer, with no runner
+    and no API call. Writes summary.rescored.json; summary.json is left as it was."""
+    summary_file = directory / "summary.json"
+    if not summary_file.is_file():
+        raise EvalError(f"{directory} is not an eval run directory (no summary.json).")
+    old = json.loads(summary_file.read_text(encoding="utf-8"))
+    eval_set = load_set(Path(old["eval_set"]))
+    if eval_set.sha256 != old["eval_set_sha256"]:
+        raise EvalError(f"{old['eval_set']} has changed since {directory} was scored.")
+    by_id = {i.id: i for i in eval_set.items}
+    records = list(_read_records(directory / "results.jsonl").values())
+    items = [by_id[str(r["id"])] for r in records]
+    outputs = [_restore(r)[0] for r in records]
+    scores = [score_item(i, o, config) for i, o in zip(items, outputs, strict=True)]
+    gates = {k: old["gates"][k] for k in ("min_accuracy", "max_missed_refusal_rate")}
+    new = {
+        **old,
+        **scored_metrics(
+            items, [int(r.get("repeat", 1)) for r in records], outputs, scores, config, gates
+        ),
+        "rescored_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "rescored_commit": git_commit(Path(__file__).resolve().parents[2]),
+    }
+    (directory / "summary.rescored.json").write_text(
+        json.dumps(new, indent=2) + "\n", encoding="utf-8"
+    )
+    return old, new
+
+
 def planned_answers(
     set_path: Path,
     split: str,
@@ -486,15 +536,10 @@ def run(
         "started_at": started.isoformat(timespec="seconds"),
         "duration_s": round(time.perf_counter() - clock, 3),
         "settings": opts.settings,
-        "repeats": repeat_summary([i.id for i in items], [r for _, r in kept], scores),
         "stopped_early": _stop_note(stopped, account_failure, len(kept), len(pairs)),
-        "run_cost_usd": round(sum(o.cost_usd for o in outputs), 6),
         "this_session_cost_usd": round(new_cost, 6),
-        **summarize(items, scores, config, gates),
+        **scored_metrics(items, [r for _, r in kept], outputs, scores, config, gates),
     }
-    agent = agent_summary([i.question for i in items], outputs, scores)
-    if agent is not None:
-        summary["agent"] = agent
     if opts.ledger is not None:
         summary["ledger_total_usd"] = opts.ledger.total()
     (directory / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

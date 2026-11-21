@@ -307,3 +307,22 @@ def test_resume_asks_again_where_the_api_failed(
     )
     assert resumed.summary["overall"]["errors"] == 0
     assert len((first.directory / "results.jsonl").read_text().splitlines()) == 3
+
+
+def test_rescore_reproduces_a_run_and_keeps_the_old_summary(
+    eval_db: Path, config: Config, tmp_path: Path
+) -> None:
+    result = _run(
+        eval_db,
+        config,
+        tmp_path,
+        PatternClient([[True, False]] * 3),
+        options=harness.RunOptions(repeats=2),
+    )
+    before = (result.directory / "summary.json").read_text()
+    old, new = harness.rescore(result.directory, config)
+    assert (result.directory / "summary.json").read_text() == before
+    rescored = json.loads((result.directory / "summary.rescored.json").read_text())
+    for key in ("overall", "grounding", "repeats", "by_category", "agent"):
+        assert rescored[key] == old[key] == new[key]
+    assert "rescored_at" in rescored
