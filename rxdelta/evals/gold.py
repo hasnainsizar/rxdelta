@@ -574,7 +574,17 @@ def count_drugs(conn: sqlite3.Connection, args: dict[str, Any]) -> StructuredAns
     rows = filtered_changes(conn, args)
     if not rows:
         return NoDataAnswer(reason=NoDataReason.no_matching_changes)
-    return CountAnswer(count=len({r.rxcui for r in rows}), unit="drugs")
+    unit = str(args.get("unit", "drugs"))
+    counts = {
+        "drugs": len({r.rxcui for r in rows}),
+        # A row is one drug, formulary and change type, as the tools count it.
+        "rows": len(rows),
+        "formularies": len({r.formulary_to for r in rows}),
+        "plans": len(frozenset().union(*(r.plans for r in rows))),
+    }
+    if unit not in counts:
+        raise GoldError(f"unknown count unit {unit!r}; units: {', '.join(counts)}")
+    return CountAnswer(count=counts[unit], unit=unit)  # type: ignore[arg-type]
 
 
 def over_cap(conn: sqlite3.Connection, args: dict[str, Any]) -> tuple[CountAnswer, DrugListAnswer]:

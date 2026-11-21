@@ -318,9 +318,11 @@ class OracleRunner:
         result = s.call("count_changes", group_by="change_type", **filters)
         data = s.need(result, NoDataReason.no_matching_changes)
         s.stop_if_empty(data.totals.rows == 0, result, NoDataReason.no_matching_changes)
-        drugs = data.totals.drugs
-        return CountAnswer(count=drugs, unit="drugs"), (
-            f"{drugs} drugs match between {start} and {end}."
+        unit = str(args.get("unit", "drugs"))
+        count = int(getattr(data.totals, unit))
+        words = {"rows": "changes (drug, formulary and change type combinations)"}
+        return CountAnswer(count=count, unit=unit), (  # type: ignore[arg-type]
+            f"{count} {words.get(unit, unit)} match between {start} and {end}."
         )
 
     def _cost_change(self, s: _Session, args: dict[str, Any]) -> tuple[StructuredAnswer, str]:
