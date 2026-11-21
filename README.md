@@ -457,20 +457,20 @@ releases): tuned on the dev split (155 questions), reported once on the
 held-out test split (65 questions). Each run asks every question 1 or 3 times;
 model answers vary, so repeated runs give the spread.
 
-| | dev, baseline | dev, v1 | dev, final | dev, final | **test, final** | dev, reworded |
-|---|---|---|---|---|---|---|
-| model | Haiku 5.5 | Sonnet 5.5 | Sonnet 5.5 | Haiku 5.5 | **Haiku 5.5** | Haiku 5.5 |
-| system prompt | v1 | v1 | v2 | v2 | **v2** | v2 |
-| repeats | 3 | 1 | 1 | 3 | **3** | 3 |
-| accuracy (mean) | 82.6% | 76.8% | 94.2% | 96.1% | **96.9%** | 95.7% |
-| accuracy, lowest and highest repeat | 81.9% to 83.2% | | | 96.1% to 96.1% | **96.9% to 96.9%** | 93.5% to 96.8% |
-| questions right on every repeat | 120 of 155 | | | 148 of 155 | **61 of 65** | 29 of 31 |
-| answers with a number no tool returned | 0% | 0% | 0% | 0% | **0%** | 0% |
-| first drafts with such a number | 3.7% | 4.5% | 3.9% | 3.4% | **0.5%** | 2.1% |
-| missed refusals of medical advice | 1 of 27 | 0 of 9 | 0 of 9 | 0 of 27 | **0 of 12** | 0 of 6 |
-| cost per question | $0.0023 | $0.026 | $0.028 | $0.0024 | **$0.0022** | $0.0029 |
-| cost per correct answer | $0.0027 | $0.034 | $0.030 | $0.0025 | **$0.0023** | $0.0030 |
-| median time per question | 12.9 s | | | 11.1 s | **10.5 s** | 10.7 s |
+| | dev, baseline | dev, v1 | dev, v2 | dev, v2 | test, v2 | dev, reworded | dev, v3 | **test, v3** |
+|---|---|---|---|---|---|---|---|---|
+| model | Haiku 5.5 | Sonnet 5.5 | Sonnet 5.5 | Haiku 5.5 | Haiku 5.5 | Haiku 5.5 | Haiku 5.5 | **Haiku 5.5** |
+| system prompt | v1 | v1 | v2 | v2 | v2 | v2 | v3 | **v3** |
+| repeats | 3 | 1 | 1 | 3 | 3 | 3 | 3 | **3** |
+| accuracy (mean) | 82.6% | 76.8% | 94.2% | 96.1% | 96.9% | 95.7% | 96.3% | **96.4%** |
+| accuracy, lowest and highest repeat | 81.9% to 83.2% | | | 96.1% to 96.1% | 96.9% to 96.9% | 93.5% to 96.8% | 94.8% to 97.4% | **95.4% to 98.5%** |
+| questions right on every repeat | 120 of 155 | | | 148 of 155 | 61 of 65 | 29 of 31 | 143 of 155 | **60 of 65** |
+| answers with a number no tool returned | 0% | 0% | 0% | 0% | 0% | 0% | 0% | **0%** |
+| first drafts with such a number | 3.7% | 4.5% | 3.9% | 3.4% | 0.5% | 2.1% | 2.6% | **2.1%** |
+| missed refusals of medical advice | 1 of 27 | 0 of 9 | 0 of 9 | 0 of 27 | 0 of 12 | 0 of 6 | 0 of 27 | **0 of 12** |
+| cost per question | $0.0023 | $0.026 | $0.028 | $0.0024 | $0.0022 | $0.0029 | $0.0026 | **$0.0021** |
+| cost per correct answer | $0.0027 | $0.034 | $0.030 | $0.0025 | $0.0023 | $0.0030 | $0.0027 | **$0.0022** |
+| median time per question | 12.9 s | | | 11.1 s | 10.5 s | 10.7 s | 12.0 s | **10.5 s** |
 
 What the columns show:
 
@@ -497,28 +497,43 @@ What the columns show:
   failed reworded, on one repeat of three: "dapagliflozin 5 mg tablets" without
   "oral" matched the combination tablets too, and the model asked which one
   was meant.
+- **v3 holds accuracy and cuts tool calls.** The third prompt looks a drug up by
+  the name as written, summarizes long answers in the text while the
+  structured answer keeps every row, names the unit of every count, and uses
+  the batch form of `get_coverage`. On dev it scored 96.3 percent against v2's
+  96.1, inside the spread of three repeats; on test 96.4 against 96.9, also
+  inside the spread. The two dev questions that checked coverage drug by drug
+  went from 28 to 33 tool calls to 2 or 3, and no answer used more than 10. It
+  also answers count questions in drugs, formularies, plans or changes: 12
+  questions, 3 per unit, scored 100 percent on every repeat. v1 and v2 stay
+  selectable with `--prompt`; v3 is the default. The v1 and v2 columns ran
+  before `get_coverage` took a list of drugs.
 - **Cost.** The final setup answers a question for about a fifth of a cent. All
   the runs in this phase, including the ones above, a smoke test, the guard
-  ablation, the paraphrase drafts and run, and the README examples, cost $17.42.
+  ablation, the paraphrase drafts and run, the v3 runs and the README examples,
+  cost $19.07.
 
 ### Where it fails
 
-On the test split it got 6 of 195 answers wrong, on 4 questions:
+With the third prompt, on the test split it got 7 of 195 answers wrong, on 5
+questions:
 
-- **Asking when it did not need to** (3 answers, one question). Asked about
-  "brivaracetam 50 mg oral tablet", the generic, it looked up only
-  "brivaracetam", saw a brand and a generic, and asked which one was meant. The
-  second prompt's rule for names shared by several products caused this: it
-  fixed the ambiguous questions and overreached on this one.
-- **Summarizing instead of finishing** (1 answer). Asked whether a drug changed
-  when it left many formularies, it gave the count instead of every change. On
-  dev, three questions with 300 or more rows still fail this way on most
-  repeats, because the second prompt allows a count past 300 rows and the eval
-  wants every row.
-- **The wrong kind of answer** (1 answer). A "which drugs" question answered with
-  a list of changes rather than a list of drugs: right facts, wrong shape.
-- **Ambiguous drug names** (1 answer). A name covering several products,
-  answered for the ones that changed instead of all of them or a question back.
+- **Rewriting a value instead of copying it** (3 answers, two questions). For a
+  drug added to a formulary it found the right drug, formulary and change, then
+  wrote the "after" value as the whole coverage record ("tier 4, prior
+  authorization, a quantity limit of 60") instead of the tool's "tier 4". This
+  is one of them: "brivaracetam 50 mg oral tablet", which under the second
+  prompt failed by asking which product was meant. The third prompt fixed the
+  asking and left this.
+- **The wrong kind of answer** (2 answers). A "which drugs" question answered
+  with a list of changes, and a question about a change that did not happen
+  answered with the change that did: right facts, wrong shape.
+- **Ambiguous drug names** (2 answers, one question). A name covering several
+  products, answered for the ones that changed instead of all of them or a
+  question back.
+
+On dev, the three questions whose answers run to 300 or more rows, which the
+second prompt always summarized with a count, now pass on most repeats.
 
 Under the first prompt the same three habits (summarizing, wrong kind,
 ambiguous names) caused almost every miss on dev; the second prompt cut them

@@ -1779,3 +1779,113 @@ baseline was recorded.
 **Skills.** thermo-nuclear (only the owner can start it) did not run once the
 pass was narrowed. pstack is installed but disabled, because it registers a
 SessionStart hook; its skills were followed from their files.
+
+## Part 9: agent fixes for a long running service
+
+Prompt 2 of `docs/rxdelta_saas_plan.md`: four fixes from `docs/phase3-ideas.md`.
+The plan is `docs/phase3-plan.md`.
+
+### Batch coverage
+
+**`get_coverage` takes `rxcui` or `rxcuis`, never both.** A list needs
+`formulary_id` or `plan_id`, because the job it does is "which of these drugs
+does this formulary cover, and how". It runs one query for every RXCUI; each
+comes back in `drugs` with `covered` true or false and the same rows a single
+call gives. A test checks every batch entry against the single call for that
+drug. The list is capped by `[tools.row_caps].get_coverage_rxcuis` (50); a
+longer list is `invalid_args` naming the cap. An unknown RXCUI fails the whole
+call and names it, the same as a single call, rather than coming back as "not
+covered", which would be a false answer. A single call's result is unchanged
+except for a `drugs` field that is null.
+
+**The tool definitions changed, so the cassette and v3's runs use new tools.**
+The v1 and v2 columns in the README ran before the batch form existed. They
+were not run again: the batch form changes what the model may do, not what a
+single call returns.
+
+### Bounded diff memo
+
+**One LRU for both memos.** `tools/changes_core` and `evals/gold` each kept an
+unbounded dict of classified changes per month pair. On the real files one
+pair is about ten seconds to build and tens of thousands of rows, so a server
+asked about many month pairs would grow without limit. Both now use
+`rxdelta/memo.py` (an `OrderedDict` behind a lock, about 20 lines), sized by
+`[tools].diff_memo_pairs` (4). Gold may import it: it is neither `tools/` nor
+`diff/`, so gold still computes its answers with none of the tools' code. The
+lock is held while a missing pair is built, as before, so two threads never
+build the same pair twice.
+
+### Count units
+
+**Gold counts every unit itself.** `count_drugs` takes an optional `unit`
+(`drugs` by default, so every existing item is byte for byte the same): rows
+are its change records, formularies the distinct later month formularies,
+plans the union of affected plans. On four real filters covering all four
+units, gold and `count_changes` agreed exactly before any item was written.
+
+**The unit questions are their own set.** `evals/rxdelta_units_v1.jsonl` holds 12
+hand written questions, 3 per unit, built with the existing builder's hand
+written path (`--n 0`) and split 8 dev and 4 test. Adding them to
+`rxdelta_v1.jsonl` would have changed its hash and made every earlier run
+incomparable. Its item IDs (`rxd-v1-h01` to `h12`) repeat the main set's,
+because the builder's prefix is fixed; an ID means something only within its
+set. The oracle scores 100 percent on it.
+
+**A count must name its unit.** The consistency guard now fails a count whose
+text does not say what it counts (drugs, formularies, plans, or changes for
+rows).
+
+### System prompt v3
+
+**Built from v2 with general rules only.** Look the drug up by the name as the
+question writes it, strength and form included, and ask which product only
+when that lookup still returns several; summarize answers over 20 rows in the
+text while the structured answer keeps every row, and page up to five pages
+before falling back to a count (v2 allowed a count past 300 rows); say which
+unit a count is in; check several drugs on one formulary with one batch call.
+The first draft of the name rule used the drug from test item `rxd-v1-0044` as
+its example; it was replaced with a placeholder before any run, because naming
+a test item in the prompt would make its score meaningless.
+
+**Results.** Haiku 5.5, guards on, 3 repeats, 32,000 output tokens:
+
+| run | folder | accuracy | cost |
+|---|---|---|---|
+| dev, v3 | `runs/20261121T212121Z_agent_dev` | 96.3% (94.8 to 97.4) | $1.21 |
+| units dev, v3 | `runs/20261121T215153Z_agent_dev` | 100% (24 of 24) | $0.01 |
+| test, v3, run once | `runs/20261121T215341Z_agent_test` | 96.4% (95.4 to 98.5) | $0.42 |
+| units test, v3, run once | `runs/20261121T220355Z_agent_test` | 100% (12 of 12) | $0.01 |
+
+Against v2 (96.1 on dev, 96.9 on test), both differences are inside the spread
+of three repeats. v3 fixed what it aimed at on dev: `0034`, `0045` and `0046`
+(300 to 328 rows) went from failing every repeat to 7 of 9, and `rxd-v1-0132`
+and `rxd-v1-0142` went from 28 to 33 tool calls to 2 or 3. No v3 answer on dev
+or test used more than 10. Single misses moved around among other
+`drug_change` items, which is why the total barely moved.
+
+**The done condition on `rxd-v1-0044` failed.** It passed on 1 of 3 test
+repeats. v3 fixed the reason it failed under v2: the lookup of "brivaracetam 50
+mg oral tablet" now finds the one product and the model no longer asks which.
+On the two failing repeats it found the right drug, formulary and change, then
+wrote the `after` value as the whole coverage record instead of `get_changes`'s
+"tier 4". `rxd-v1-0040` failed once the same way. This is the "bad arguments"
+habit from the v1 error analysis, which v3 already tells the model not to do.
+It was seen after the test run, so nothing was changed for it; the next step
+is a guard, not a prompt rule (see `docs/phase3-ideas.md`).
+
+**v3 is the default.** It met the dev bar, cut the tool calls on multi step
+coverage questions, and answers in the right unit. v1 and v2 stay selectable
+with `--prompt`. The cassette was recorded again with v3 (10 fixture questions,
+10 right), and the replay test passes on it.
+
+**Spend.** The v3 runs and the cassette cost $1.65; the ledger total is $19.07 of
+the $50 budget.
+
+### Skills
+
+The project asks for ponytail, pstack and thermo-nuclear on every task.
+thermo-nuclear can only be started by the owner and did not run; pstack is
+installed but disabled because of its SessionStart hook, and its `deslop` and
+`blast-radius` were followed from their files. ponytail shaped the size of each
+change: one helper module for the memo, the batch inside the existing tool,
+gold's existing count query taking a unit.
