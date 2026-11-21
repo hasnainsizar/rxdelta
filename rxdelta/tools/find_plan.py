@@ -8,8 +8,9 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
+from rxdelta.db.queries import loaded_months
 from rxdelta.names.normalize import normalize_name
-from rxdelta.tools.common import Month, ToolInput, loaded_months, month_problem, parse_plan_id
+from rxdelta.tools.common import Month, ToolInput, month_problem, parse_plan_id
 from rxdelta.tools.context import ToolContext
 from rxdelta.tools.envelope import ErrorCode, Provenance, ToolResult, cap_note, failure, success
 
