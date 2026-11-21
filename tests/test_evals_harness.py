@@ -27,7 +27,7 @@ from rxdelta.ask.answer import (
 )
 from rxdelta.cli import app
 from rxdelta.config import Category, Config
-from rxdelta.evals import builder, harness
+from rxdelta.evals import agent_metrics, builder, harness
 from rxdelta.evals.items import EvalItem, GoldSpec, manifest_path, read_items
 from rxdelta.evals.runners import RUNNERS
 from rxdelta.evals.score import score_item, set_scores
@@ -491,11 +491,11 @@ def test_the_report_lists_failures(
 
 
 def test_percentile() -> None:
-    assert harness.percentile([], 0.95) == 0.0
-    assert harness.percentile([5.0], 0.5) == 5.0
+    assert agent_metrics.percentile([], 0.95) == 0.0
+    assert agent_metrics.percentile([5.0], 0.5) == 5.0
     values = [float(v) for v in range(1, 101)]
-    assert harness.percentile(values, 0.50) == 50.0
-    assert harness.percentile(values, 0.95) == 95.0
+    assert agent_metrics.percentile(values, 0.50) == 50.0
+    assert agent_metrics.percentile(values, 0.95) == 95.0
 
 
 def test_runner_registry_has_oracle_null_and_agent() -> None:

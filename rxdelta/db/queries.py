@@ -100,34 +100,6 @@ def plans(conn: sqlite3.Connection, month: str, contract_id: str | None = None) 
     ]
 
 
-def formulary_coverage(
-    conn: sqlite3.Connection, month: str, formulary_id: str
-) -> dict[str, DrugCoverage]:
-    rows = conn.execute(
-        "SELECT ndc_11, rxcui, tier_level, prior_auth, step_therapy, quantity_limit, "
-        "quantity_limit_amount, quantity_limit_days FROM formulary "
-        "WHERE snapshot_month = ? AND formulary_id = ?",
-        (month, formulary_id),
-    ).fetchall()
-    return {
-        str(r["ndc_11"]): DrugCoverage(
-            ndc_11=str(r["ndc_11"]),
-            rxcui=str(r["rxcui"]),
-            tier_level=int(r["tier_level"]),
-            prior_auth=bool(r["prior_auth"]),
-            step_therapy=bool(r["step_therapy"]),
-            quantity_limit=bool(r["quantity_limit"]),
-            quantity_limit_amount=(
-                None if r["quantity_limit_amount"] is None else float(r["quantity_limit_amount"])
-            ),
-            quantity_limit_days=(
-                None if r["quantity_limit_days"] is None else int(r["quantity_limit_days"])
-            ),
-        )
-        for r in rows
-    }
-
-
 _COVERAGE_COLUMNS = (
     "ndc_11, rxcui, tier_level, prior_auth, step_therapy, "
     "quantity_limit, quantity_limit_amount, quantity_limit_days"

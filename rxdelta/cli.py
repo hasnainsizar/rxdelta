@@ -35,6 +35,7 @@ from rxdelta.diff.impact import ChangeGroup
 from rxdelta.evals import builder as evalset_builder
 from rxdelta.evals import harness as eval_harness
 from rxdelta.evals import paraphrase
+from rxdelta.evals.report import pct
 from rxdelta.ingest import download as cms_download
 from rxdelta.ingest.loader import load_month
 from rxdelta.limitations import ESTIMATE_NOTE, LIMITATIONS, LIMITATIONS_TITLE, OPEN_ENDED_NOTE
@@ -1015,10 +1016,6 @@ eval_app = typer.Typer(no_args_is_help=True, help="Score a runner against the ev
 app.add_typer(eval_app, name="eval")
 
 
-def _pct(value: float | None) -> str:
-    return "n/a" if value is None else f"{100 * value:.1f}%"
-
-
 @eval_app.command("run")
 @handle_errors
 def eval_run(
@@ -1168,10 +1165,10 @@ def eval_run(
     table.add_column("Items", justify="right")
     table.add_column("Accuracy", justify="right")
     for name, row in summary["by_category"].items():
-        table.add_row(name, str(row["items"]), _pct(row["accuracy"]))
+        table.add_row(name, str(row["items"]), pct(row["accuracy"]))
     console.print(table)
     console.print(
-        f"Accuracy {_pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}). "
+        f"Accuracy {pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}). "
         f"False refusals {overall['false_refusals']}, missed refusals "
         f"{overall['missed_refusals']}, items with ungrounded numbers "
         f"{summary['grounding']['items_with_ungrounded']}.",
@@ -1181,13 +1178,13 @@ def eval_run(
     if agent:
         reps = summary["repeats"]
         console.print(
-            f"Repeats {reps['repeats']}: mean {_pct(reps['mean'])}, min {_pct(reps['min'])}, "
-            f"max {_pct(reps['max'])}, stdev {100 * reps['stdev']:.1f} points. First draft "
-            f"ungrounded {_pct(agent['first_draft_ungrounded_rate'])}, final "
-            f"{_pct(agent['final_ungrounded_rate'])}. Cost ${summary['run_cost_usd']:.4f} "
+            f"Repeats {reps['repeats']}: mean {pct(reps['mean'])}, min {pct(reps['min'])}, "
+            f"max {pct(reps['max'])}, stdev {100 * reps['stdev']:.1f} points. First draft "
+            f"ungrounded {pct(agent['first_draft_ungrounded_rate'])}, final "
+            f"{pct(agent['final_ungrounded_rate'])}. Cost ${summary['run_cost_usd']:.4f} "
             f"(${agent['cost_per_question']:.4f} per answer, "
             f"${agent['cost_per_correct'] or 0:.4f} per correct answer), cache hit share "
-            f"{_pct(agent['cache_hit_share'])}.",
+            f"{pct(agent['cache_hit_share'])}.",
             highlight=False,
         )
     if agent and agent["errors"]:
@@ -1232,8 +1229,8 @@ def eval_compare(
         delta = row["delta"]
         table.add_row(
             name,
-            _pct(row["a"]),
-            _pct(row["b"]),
+            pct(row["a"]),
+            pct(row["b"]),
             "n/a" if delta is None else f"{100 * delta:+.1f} points",
         )
     console.print(table)

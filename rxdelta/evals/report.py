@@ -16,7 +16,7 @@ from rxdelta.report.fonts import embedded_faces
 from rxdelta.report.html import _TEMPLATE_DIR
 
 
-def _pct(value: float | None) -> str:
+def pct(value: float | None) -> str:
     return "n/a" if value is None else f"{100 * value:.1f}%"
 
 
@@ -33,15 +33,15 @@ def _agent_lines(summary: dict[str, Any]) -> list[str]:
         "",
         "| agent metric | value |",
         "|---|---|",
-        f"| accuracy by repeat | {', '.join(_pct(a) for a in reps['accuracy_by_repeat'])} |",
-        f"| mean, min, max, stdev | {_pct(reps['mean'])}, {_pct(reps['min'])}, "
-        f"{_pct(reps['max'])}, {100 * reps['stdev']:.1f} points |",
+        f"| accuracy by repeat | {', '.join(pct(a) for a in reps['accuracy_by_repeat'])} |",
+        f"| mean, min, max, stdev | {pct(reps['mean'])}, {pct(reps['min'])}, "
+        f"{pct(reps['max'])}, {100 * reps['stdev']:.1f} points |",
         f"| items right on every, some, no repeat | {reps['items_right_every_repeat']}, "
         f"{reps['items_right_some_repeats']}, {reps['items_right_no_repeat']} |",
-        f"| first draft ungrounded | {_pct(agent['first_draft_ungrounded_rate'])} |",
-        f"| final ungrounded | {_pct(agent['final_ungrounded_rate'])} |",
+        f"| first draft ungrounded | {pct(agent['first_draft_ungrounded_rate'])} |",
+        f"| final ungrounded | {pct(agent['final_ungrounded_rate'])} |",
         f"| turns per question, mean | {agent['turns']['mean']:.2f} |",
-        f"| cache hit share | {_pct(agent['cache_hit_share'])} |",
+        f"| cache hit share | {pct(agent['cache_hit_share'])} |",
         f"| cost per question | ${agent['cost_per_question']:.4f} |",
         "| cost per correct answer | "
         + (f"${agent['cost_per_correct']:.4f}" if agent["cost_per_correct"] else "n/a")
@@ -74,12 +74,12 @@ def summary_markdown(summary: dict[str, Any]) -> str:
         *_agent_lines(summary),
         "| metric | value |",
         "|---|---|",
-        f"| accuracy | {_pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}) |",
-        f"| mean F1, drug lists | {_pct(overall['mean_f1_drug_list'])} |",
+        f"| accuracy | {pct(overall['accuracy'])} ({overall['correct']} of {overall['items']}) |",
+        f"| mean F1, drug lists | {pct(overall['mean_f1_drug_list'])} |",
         f"| false refusals | {overall['false_refusals']} of {overall['answerable']} answerable |",
         f"| missed refusals | {overall['missed_refusals']} of {overall['out_of_scope']} "
         "out of scope |",
-        f"| required tools called | {_pct(tools['required_called_rate'])} |",
+        f"| required tools called | {pct(tools['required_called_rate'])} |",
         f"| mean tool calls | {tools['mean_calls']:.2f} |",
         f"| items with ungrounded numbers | {grounding['items_with_ungrounded']} |",
         "",
@@ -87,7 +87,7 @@ def summary_markdown(summary: dict[str, Any]) -> str:
         "|---|---|---|",
     ]
     for category, row in summary["by_category"].items():
-        lines.append(f"| {category} | {row['items']} | {_pct(row['accuracy'])} |")
+        lines.append(f"| {category} | {row['items']} | {pct(row['accuracy'])} |")
     return "\n".join(lines) + "\n"
 
 
@@ -143,7 +143,7 @@ def render_html(
     )
     return env.get_template("eval_report.html.j2").render(
         s=summary,
-        pct=_pct,
+        pct=pct,
         faces=embedded_faces(),
         kinds=kinds,
         worst=_worst(items, outputs, scores, config.eval.worst_items),

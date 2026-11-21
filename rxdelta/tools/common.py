@@ -9,6 +9,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from rxdelta.ask.values import CoverageState
+from rxdelta.db.queries import loaded_months
 from rxdelta.types import DrugCoverage, PlanKey
 
 Month = Annotated[str, StringConstraints(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
@@ -69,13 +70,6 @@ class CoverageValues(BaseModel):
             quantity_limit_amount=self.quantity_limit_amount,
             quantity_limit_days=self.quantity_limit_days,
         )
-
-
-def loaded_months(conn: sqlite3.Connection) -> list[str]:
-    rows = conn.execute(
-        "SELECT DISTINCT snapshot_month FROM ingest_log ORDER BY snapshot_month"
-    ).fetchall()
-    return [str(r[0]) for r in rows]
 
 
 def month_problem(conn: sqlite3.Connection, *months: str) -> str | None:

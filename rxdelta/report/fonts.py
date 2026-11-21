@@ -110,7 +110,3 @@ def embedded_faces() -> tuple[EmbeddedFace, ...]:
             )
         )
     return tuple(out)
-
-
-def embedded_bytes() -> int:
-    return sum((FONT_DIR / f.file_name).stat().st_size for f in FACES)

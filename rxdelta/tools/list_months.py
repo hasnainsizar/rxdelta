@@ -6,7 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from rxdelta.tools.common import ToolInput, loaded_months
+from rxdelta.db.queries import loaded_months
+from rxdelta.tools.common import ToolInput
 from rxdelta.tools.context import ToolContext
 from rxdelta.tools.envelope import Provenance, ToolResult, success
 
