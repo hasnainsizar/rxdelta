@@ -255,6 +255,8 @@ find_drug = 25
 find_plan = 25
 # Formulary rows per coverage lookup.
 get_coverage = 50
+# RXCUIs one batch coverage lookup may check on one formulary.
+get_coverage_rxcuis = 50
 # Change rows per page.
 get_changes = 100
 # Groups per count; the totals always cover every group.
