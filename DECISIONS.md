@@ -1701,8 +1701,42 @@ still matches exactly: none of its ten recorded drafts used a numbered list.
 
 ### Paraphrase run
 
+> Superseded. The owner approved 31 of the 40 candidates and the run was done;
+> see below.
+
 Not done yet. `evals/paraphrase_candidates.csv` in the repo has no approved rows,
 so there is nothing to build the paraphrase set from.
+
+**31 reviewed rewordings, scored against the originals.** The owner approved 31
+of the 40 drafts, covering all 11 categories, and edited none of the wording.
+The 9 left out include the two unchanged copies (`0005`, `0021`) and the one
+that changed the meaning (`0004`, "formulary" became "plan").
+`rxdelta evalset paraphrase --approved evals/paraphrase_candidates.csv` built
+`evals/rxdelta_v1_para.jsonl` with the original gold answers; the oracle scores
+100 percent on it, so the answers carried over intact. The final configuration
+(Haiku 5.5, v2, guards on, 32,000 tokens) ran it 3 times
+(`runs/20261121T204321Z_agent_all`, $0.27):
+
+| | original wording (final dev run) | reworded |
+|---|---|---|
+| accuracy over 93 answers | 96.8% (90) | 95.7% (89) |
+| lowest and highest repeat | 96.8% to 96.8% | 93.5% to 96.8% |
+| questions right on every repeat | 30 of 31 | 29 of 31 |
+| first drafts with an ungrounded number | | 2.1% |
+
+**One question passed in its original wording and failed reworded**, on one
+repeat of three: `rxd-v1-0115`, "how much extra will dapagliflozin 5 mg oral
+tablet cost on H3362-040 ..." became "how much more will dapagliflozin 5 mg
+tablets cost ...". Without "oral", `find_drug` matched four products, the
+dapagliflozin and metformin combinations among them, and the model asked which
+one was meant instead of pricing the generic tablet. It is the over asking
+already seen on `rxd-v1-0044`, set off here by looser wording. `rxd-v1-0173`
+fails in both wordings, as before.
+
+What this does and does not show: on these 31 questions, everyday wording costs
+about one point, inside the spread of three repeats. It is a small sample drawn
+from template questions, and the drafts came from a model, so a set written by
+people who do not know the domain words would be a harder test.
 
 ## Part 8: simplification
 
