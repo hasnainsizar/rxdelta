@@ -511,8 +511,10 @@ What the columns show:
 - **A fourth check, on copied values, came after the test run.** It sends back
   a change answer whose before or after value does not match the tool's row,
   the cause of two of v3's test misses. On dev it scored 95.5 percent and never
-  fired; the test split was not run again with it, so the test column above is
-  v3 without it.
+  fired. It was checked offline against the saved v3 test answers, with no new
+  model calls: it flags exactly the three wrong answers that rewrote a value
+  and nothing else. The test split was not run again, so the test column above
+  is v3 without it.
 - **Cost.** The final setup answers a question for about a fifth of a cent. All
   the runs in this phase, including the ones above, a smoke test, the guard
   ablation, the paraphrase drafts and run, the v3 runs and the README examples,

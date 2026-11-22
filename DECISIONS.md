@@ -1935,3 +1935,16 @@ value, and a loop that sends it back once), not by an eval number.
 
 The replay cassette did not need recording again: guard settings are not part
 of a request, and none of its ten recorded answers trips the new check.
+
+**Accepted on its tests, and checked offline against the saved test answers.**
+The owner accepted the guard without another test run. `scripts/check_value_guard.py`
+runs it over a saved run's answers, with no model calls. On the v3 test run
+(`runs/20261121T215341Z_agent_test`, 195 answers) it flags exactly three, all
+scored wrong: `rxd-v1-0044` on repeats 1 and 3 and `rxd-v1-0040` on repeat 3,
+each with the whole coverage record written where `get_changes` said "tier 4"
+or "tier 5". It flags nothing else. On the saved v3 dev run it flags one answer,
+`rxd-v1-0036` on repeat 3, also scored wrong and the same habit; on the v2 dev
+and test runs it flags none. No answer scored right is flagged in any of the
+four runs. With the guard on, each of these answers would have been sent back
+once with the tool's values; whether the retry fixes them was not measured,
+because the test split was not run again.
