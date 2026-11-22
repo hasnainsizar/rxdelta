@@ -106,8 +106,10 @@ class AnthropicClient:
 
     def __init__(self, api_key: str, timeout_seconds: float, max_retries: int) -> None:
         import anthropic
+        import httpx2
 
         self._anthropic = anthropic
+        self._transport_error = httpx2.TransportError
         self._client = anthropic.Anthropic(
             api_key=api_key, timeout=timeout_seconds, max_retries=max_retries
         )
@@ -136,7 +138,9 @@ class AnthropicClient:
             raise ModelError(
                 type(exc).__name__, f"HTTP {exc.status_code}: {exc.message}", account=account
             ) from exc
-        except errors.APIConnectionError as exc:
+        except (errors.APIConnectionError, self._transport_error) as exc:
+            # A stream cut off after it started raises the HTTP library's own error,
+            # which the SDK does not wrap; it is the same kind of failure.
             raise ModelError(type(exc).__name__, str(exc)) from exc
         usage = message.usage
         return ModelResponse(

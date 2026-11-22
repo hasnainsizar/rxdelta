@@ -141,3 +141,19 @@ def test_missing_key_is_one_sentence(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     env = tmp_path / ".env"
     env.write_text("ANTHROPIC_API_KEY=from-file\n", encoding="utf-8")
     assert api_key(env) == "from-file"
+
+
+def test_a_stream_cut_off_mid_response_is_a_model_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx2
+
+    from rxdelta.agent.client import AnthropicClient
+
+    client = AnthropicClient(api_key="test", timeout_seconds=1.0, max_retries=0)
+
+    def broken(**kwargs: object) -> object:
+        raise httpx2.RemoteProtocolError("peer closed connection")
+
+    monkeypatch.setattr(client._client.messages, "stream", broken)
+    with pytest.raises(ModelError) as caught:
+        client.create(_request())
+    assert caught.value.kind == "RemoteProtocolError" and not caught.value.account
