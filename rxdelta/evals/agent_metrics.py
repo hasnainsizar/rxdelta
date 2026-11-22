@@ -8,11 +8,10 @@ import statistics
 from collections import defaultdict
 from typing import Any
 
+from rxdelta.agent.loop import GUARDS
 from rxdelta.ask.answer import RunnerOutput
 from rxdelta.evals import grounding
 from rxdelta.evals.score import ItemScore
-
-GUARDS = ("schema", "grounding", "consistency")
 
 
 def rate(numerator: int, denominator: int) -> float | None:

@@ -383,6 +383,11 @@ grounding_retries = 1
 consistency = true
 # Retries after a consistency failure.
 consistency_retries = 1
+# Every before and after value in a change answer must be copied from the
+# get_changes row for the same drug, formulary and change type.
+values = true
+# Retries after a values failure.
+values_retries = 1
 
 # Prices in US dollars per million tokens, from
 # https://platform.claude.com/docs/en/about-claude/pricing (read 2026-11-18).

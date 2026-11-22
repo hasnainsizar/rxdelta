@@ -7,12 +7,14 @@ answer passes. The loop sends the problems back to the model as an error.
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
 from pydantic import ValidationError
 
 from rxdelta.ask.answer import (
+    ChangeAnswer,
     ClarifyAnswer,
     CountAnswer,
     CoverageAnswer,
@@ -104,6 +106,34 @@ def consistency_problems(answer: StructuredAnswer, text: str) -> list[str]:
         if missing:
             problems.append(
                 "final_text asks which drug is meant but does not name: " + ", ".join(missing) + "."
+            )
+    return problems
+
+
+def value_problems(answer: StructuredAnswer, change_results: Iterable[dict[str, Any]]) -> list[str]:
+    """Each change item's before and after must be copied from a get_changes row for the
+    same drug, formulary and change type."""
+    if not isinstance(answer, ChangeAnswer):
+        return []
+    found: dict[tuple[str, str, str], set[tuple[str | None, str | None]]] = defaultdict(set)
+    for result in change_results:
+        for row in ((result.get("data") or {}).get("rows")) or []:
+            key = (str(row["rxcui"]), str(row["formulary_id"]), str(row["change_type"]))
+            found[key].add((row.get("before_value"), row.get("after_value")))
+    problems = []
+    for item in answer.items:
+        key = (item.rxcui, item.formulary_id, item.change_type.value)
+        if key not in found:
+            problems.append(
+                f"RXCUI {item.rxcui} on formulary {item.formulary_id}: no get_changes row has "
+                f"change type {item.change_type.value}. Use only changes get_changes returned."
+            )
+        elif (item.before, item.after) not in found[key]:
+            shown = "; ".join(f"before {b!r}, after {a!r}" for b, a in sorted(found[key], key=str))
+            problems.append(
+                f"RXCUI {item.rxcui} {item.change_type.value} on formulary {item.formulary_id}: "
+                f"before and after must be get_changes's before_value and after_value exactly "
+                f"({shown}), not before {item.before!r}, after {item.after!r}."
             )
     return problems
 

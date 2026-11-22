@@ -302,6 +302,8 @@ class GuardsConfig(_Section):
     grounding_retries: int = Field(ge=0)
     consistency: bool
     consistency_retries: int = Field(ge=0)
+    values: bool
+    values_retries: int = Field(ge=0)
 
 
 class AgentConfig(_Section):

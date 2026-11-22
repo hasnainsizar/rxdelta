@@ -1059,6 +1059,9 @@ def eval_run(
     no_consistency_guard: Annotated[
         bool, typer.Option("--no-consistency-guard", help="Turn off the consistency guard.")
     ] = False,
+    no_values_guard: Annotated[
+        bool, typer.Option("--no-values-guard", help="Turn off the before and after check.")
+    ] = False,
     resume: Annotated[
         Path | None, typer.Option("--resume", help="Run folder to finish; same flags as before.")
     ] = None,
@@ -1080,6 +1083,7 @@ def eval_run(
             ("schema", no_schema_guard),
             ("grounding", no_grounding_guard),
             ("consistency", no_consistency_guard),
+            ("values", no_values_guard),
         )
         if off
     )
