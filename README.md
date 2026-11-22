@@ -508,6 +508,11 @@ What the columns show:
   questions, 3 per unit, scored 100 percent on every repeat. v1 and v2 stay
   selectable with `--prompt`; v3 is the default. The v1 and v2 columns ran
   before `get_coverage` took a list of drugs.
+- **A fourth check, on copied values, came after the test run.** It sends back
+  a change answer whose before or after value does not match the tool's row,
+  the cause of two of v3's test misses. On dev it scored 95.5 percent and never
+  fired; the test split was not run again with it, so the test column above is
+  v3 without it.
 - **Cost.** The final setup answers a question for about a fifth of a cent. All
   the runs in this phase, including the ones above, a smoke test, the guard
   ablation, the paraphrase drafts and run, the v3 runs and the README examples,

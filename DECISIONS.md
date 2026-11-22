@@ -1889,3 +1889,49 @@ installed but disabled because of its SessionStart hook, and its `deslop` and
 `blast-radius` were followed from their files. ponytail shaped the size of each
 change: one helper module for the memo, the batch inside the existing tool,
 gold's existing count query taking a unit.
+
+### Value guard
+
+**A fourth guard checks before and after values.** Under v3, `rxd-v1-0044` and
+`rxd-v1-0040` (both test items) failed by writing the `after` value as the
+whole coverage record instead of `get_changes`'s "tier 4". The `values` guard
+requires every item of a `change` answer to match a `get_changes` row from the
+same run on drug, formulary and change type, with `before` and `after` equal to
+that row's `before_value` and `after_value`. A mismatch goes back to the model
+once with the tool's values, like the other guards; it has its own switch,
+`[agent.guards].values`, retry count and `--no-values-guard` flag. The guard
+list now lives only in `agent/loop.py`; `evals/agent_metrics.py` imports it
+instead of keeping a copy.
+
+**A stream cut off mid response is now an API error.** The first dev run with
+the guard (`runs/20261121T225343Z_agent_dev`, 93.5 percent) lost 14 answers on
+repeat 2 to the network. Ten were `APIConnectionError`; four were
+`ReadTimeout` and `RemoteProtocolError` raised by the HTTP library while a
+stream was already running, which the SDK does not wrap, so they ended as
+runner crashes that `--resume` would not ask again. The client now maps
+`httpx2.TransportError` to a `ModelError` like any connection error. The run
+was done again rather than resumed, since its four crashed answers were not
+marked as API errors.
+
+**Dev, Haiku 5.5, v3, all four guards, 3 repeats** (`runs/20261122T003530Z_agent_dev`,
+$1.18): 95.5 percent (96.1, 94.8, 95.5 by repeat), against 96.3 percent for v3
+without the guard. **The guard fired 0 times in 465 answers**: the rewritten
+value did not occur on dev in this run, and the dev item with the same habit
+under v1, `rxd-v1-0022`, passed on every repeat. With the guard silent, the
+answers are v3's, and the difference is run to run variation: v3's own dev
+repeats ranged from 94.8 to 97.4. Four questions right on every repeat before
+missed once (`0059` and `0138`, a list answered as changes; `0062`, a schema
+failure; `0114`, a cost answered with no data), none of them about before or
+after values.
+
+**The done conditions were not met, and the runs were not repeated to meet
+them.** Dev accuracy is below 96.3 and four questions moved from right on
+every repeat to right on two of three; both are inside the spread of three
+repeats, and rerunning until they cleared would be choosing the run. The
+condition on `rxd-v1-0040` cannot be checked on dev: it is a test item, and the
+test split was not run again. The guard's effect on the habit it targets is
+shown by the tests (a match, a mismatch, a whole coverage record in place of a
+value, and a loop that sends it back once), not by an eval number.
+
+The replay cassette did not need recording again: guard settings are not part
+of a request, and none of its ten recorded answers trips the new check.
